@@ -1,0 +1,21 @@
+https://neurostars.org/t/fmriprep-sdc-fails-to-associate-to-bold-image-preprocess-working/22568/17
+
+https://neurostars.org/t/fmriprep-dcm2bids-keyerror-phasediff-fmap0-is-already-in-mapping/30242
+
+#REV: not necessary, I set it correctly to not use URI
+#https://unfmontreal.github.io/Dcm2Bids/3.2.0/how-to/use-advanced-commands/#bids_uri
+
+
+## OK, "safe" to JUST use "intendedfor" fieldmap...but "recommended" (for more complex cases), to include B0FieldIdentifier
+https://github.com/bids-standard/bids-specification/blob/master/src/modality-specific-files/magnetic-resonance-imaging-data.md#fieldmap-data
+
+
+#REV: uhoh, it says we MUST have some phaseencoding direction
+#https://github.com/bids-standard/bids-specification/blob/master/src/modality-specific-files/magnetic-resonance-imaging-data.md#fieldmap-data
+
+{
+   "PhaseEncodingDirection": "j-",
+      "TotalReadoutTime": 0.095,
+         "IntendedFor": "bids::sub-01/func/sub-01_task-motor_bold.nii.gz",
+	    "B0FieldIdentifier": "pepolar_fmap0"
+	    }

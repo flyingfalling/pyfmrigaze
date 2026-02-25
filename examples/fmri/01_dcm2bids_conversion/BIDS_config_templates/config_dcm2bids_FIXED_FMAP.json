@@ -1,0 +1,220 @@
+{
+  "bids_uri": "relative",
+  "descriptions": [
+    {
+      "datatype": "anat",
+      "suffix": "T1w",
+      "criteria": {
+        "SeriesDescription": "*UNI-DEN*"
+      }
+    },
+    {
+      "id": "task_rest_PA",
+      "datatype": "func",
+      "suffix": "bold",
+      "custom_entities": "task-rest_dir-PA",
+      "criteria": {
+        "SeriesDescription": "RS-fMRI_PA"
+      },
+      "sidecar_changes": {
+        "TaskName": "Resting_state"
+      }
+    },
+    {
+       "datatype": "func",
+       "suffix": "sbref",
+       "custom_entities": "task-rest_dir-PA",
+       "criteria": {
+         "SeriesDescription": "RS-fMRI_PA_SBRef"
+       },
+       "sidecar_changes": {
+         "TaskName": "Resting_state"
+       }
+    },
+    {
+      "id": "task_rest_AP",
+      "datatype": "func",
+      "suffix": "bold",
+      "custom_entities": "task-rest_dir-AP",
+      "criteria": {
+        "SeriesDescription": "RS-fMRI_AP"
+      },
+      "sidecar_changes": {
+        "TaskName": "Resting_state"
+      }
+    },
+    {
+       "datatype": "func",
+       "suffix": "sbref",
+       "custom_entities": "task-rest_dir-AP",
+       "criteria": {
+         "SeriesDescription": "RS-fMRI_AP_SBRef"
+       },
+       "sidecar_changes": {
+         "TaskName": "Resting_state"
+       }
+    },
+    {
+      "id": "task_saliency_FV_PA",
+      "datatype": "func",
+      "suffix": "bold",
+      "custom_entities": "task-FreeView_dir-PA",
+      "criteria": {
+        "SeriesDescription": "Saliency_free_view_PA"
+      },
+      "sidecar_changes": {
+        "TaskName": "Saliency_FreeView"
+      }
+    },
+    {
+      "datatype": "func",
+      "suffix": "sbref",
+      "custom_entities": "task-FreeView_dir-PA",
+      "criteria": {
+        "SeriesDescription": "Saliency_free_view_PA_SBRef"
+      },
+      "sidecar_changes": {
+        "TaskName": "Saliency_FreeView"
+      }
+    },
+    {
+      "id": "task_saliency_FV_AP",
+      "datatype": "func",
+      "suffix": "bold",
+      "custom_entities": "task-FreeView_dir-AP",
+      "criteria": {
+        "SeriesDescription": "Saliency_free_view_AP"
+      },
+      "sidecar_changes": {
+        "TaskName": "Saliency_FreeView"
+      }
+    },
+    {
+      "datatype": "func",
+      "suffix": "sbref",
+      "custom_entities": "task-FreeView_dir-AP",
+      "criteria": {
+        "SeriesDescription": "Saliency_free_view_AP_SBRef"
+      },
+      "sidecar_changes": {
+        "TaskName": "Saliency_FreeView"
+      }
+    },
+    {
+      "id": "task_saliency_CF_PA",
+      "datatype": "func",
+      "suffix": "bold",
+      "custom_entities": "task-CentreFixation_dir-PA",
+      "criteria": {
+        "SeriesDescription": "Saliency_gaze_fixed_PA"
+      },
+      "sidecar_changes": {
+        "TaskName": "Saliency_CentreFixation"
+      }
+    },
+    {
+      "datatype": "func",
+      "suffix": "sbref",
+      "custom_entities": "task-CentreFixation_dir-PA",
+      "criteria": {
+        "SeriesDescription": "Saliency_gaze_fixed_PA_SBRef"
+      },
+      "sidecar_changes": {
+        "TaskName": "Saliency_CentreFixation"
+      }
+    },
+    {
+      "id": "task_saliency_CF_AP",
+       "datatype": "func",
+       "suffix": "bold",
+       "custom_entities": "task-CentreFixation_dir-AP",
+       "criteria": {
+         "SeriesDescription": "Saliency_gaze_fixed_AP"
+       },
+       "sidecar_changes": {
+         "TaskName": "Saliency_CentreFixation"
+       }
+    },
+    {
+       "datatype": "func",
+       "suffix": "sbref",
+       "custom_entities": "task-CentreFixation_dir-AP",
+       "criteria": {
+         "SeriesDescription": "Saliency_gaze_fixed_AP_SBRef"
+       },
+       "sidecar_changes": {
+         "TaskName": "Saliency_CentreFixation"
+       }
+    },
+    {
+      "datatype": "fmap",
+      "suffix": "epi",
+      "custom_entities": "dir-PA",
+      "criteria": {
+        "SeriesDescription": "TopUp_SE_PA"
+      },
+      "sidecar_changes": {
+        "TaskName": "Saliency",
+        "IntendedFor": [
+            "task_rest_PA",
+     	    "task_rest_AP",
+            "task_saliency_FV_PA",
+            "task_saliency_FV_AP",
+            "task_saliency_CF_PA",
+            "task_saliency_CF_AP"
+                 	]
+      }
+    },
+    {
+       "datatype": "fmap",
+       "suffix": "epi",
+       "custom_entities": "dir-AP",
+       "criteria": {
+         "SeriesDescription": "TopUp_SE_AP"
+       },
+       "sidecar_changes": {
+         "TaskName": "Saliency",
+         "IntendedFor": [
+         	"task_rest_PA",
+            "task_rest_AP",
+         	"task_saliency_FV_PA",
+         	"task_saliency_FV_AP",
+         	"task_saliency_CF_PA",
+         	"task_saliency_CF_AP"
+         	]
+        }
+    },
+    {
+          "datatype": "dwi",
+          "suffix": "dwi",
+          "custom_entities": "dir-PA",
+          "criteria": {
+            "SeriesDescription": "IVIM*PA_d89"
+          }
+        },
+        {
+           "datatype": "dwi",
+           "suffix": "sbref",
+           "custom_entities": "dir-PA",
+           "criteria": {
+             "SeriesDescription": "IVIM*PA_d89_SBRef"
+           }
+        },
+        {
+           "datatype": "dwi",
+           "suffix": "dwi",
+           "custom_entities": "dir-AP",
+           "criteria": {
+           "SeriesDescription": "IVIM*AP"
+                  }
+                },
+        {
+           "datatype": "dwi",
+           "suffix": "sbref",
+           "custom_entities": "dir-AP",
+           "criteria": {
+           "SeriesDescription": "IVIM*AP_SBRef"
+                          }
+                        }
+  ]
+}

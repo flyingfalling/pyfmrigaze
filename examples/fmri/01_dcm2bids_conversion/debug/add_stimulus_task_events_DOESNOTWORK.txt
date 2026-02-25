@@ -1,0 +1,33 @@
+#!/bin/bash
+
+## https://bids-specification.readthedocs.io/en/stable/modality-specific-files/task-events.html
+
+## REV: this is for adding "events".
+
+
+## In our case, we have "task" (free-viewing or fixed viewing).
+## At beginning (first 15-30sec?) of each is the "wait time" (rest at beginning).
+## Which is a simple "fixation" task?
+
+## Then, the videos start (30x videos at 10 sec each is 30/(60sec/10sec)=30/6 = 5 minutes.
+## So 15 sec -> 300 sec -> 15 sec, total 330 sec. (5.5 minutes).
+
+
+## I need the  EDF files to know which videos were played at what time point. However, basically
+## the format is same (15 sec -> 300 sec -> 15 sec), with 1 video every 10 seconds starting at 15 sec.
+
+## I should specify "rest time" at beginning for something? For the GLM?
+
+
+## There is "continuous time" signals
+## Add "stimulus info" in the events file as well.
+
+# Signals related to stimuli (such as parameters of a film or audio stimuli) that are evenly recorded at a constant sampling frequency MUST be specified using a compressed tabular file (TSV.GZ file) and a corresponding JSON file for storing metadata fields (see below).
+
+## sub-<label>/[ses-<label>/]
+#    <datatype>/
+#        <matches>_stim.tsv.gz
+#        <matches>_stim.json
+
+
+## No header...ugh.
