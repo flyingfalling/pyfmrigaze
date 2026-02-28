@@ -4,9 +4,8 @@
 
 SCRIPTS="./scripts"
 
-DATADIR='/mnt/coishare/data/szfmri7t/'
-ORIG_DICOM_DIR=$1   # "$DATADIR"'/SZ_gaze_fmri_dicom_20250530/'
-NEW_BIDS_DIR=$2     # "$DATADIR"'/SZ_gaze_fmri_BIDS_20251031'
+ORIG_DICOM_DIR=$1
+NEW_BIDS_DIR=$2 
 
 LOGSDIR="/tmp/dcm2bids_logs"
 mkdir -p $LOGSDIR

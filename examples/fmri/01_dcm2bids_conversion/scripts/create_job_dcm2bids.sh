@@ -19,7 +19,7 @@ do
     
     SubjectDataFolder=${DicomFolder}/${Subject}
     SUBJ_SCRIPT="${JOBSDIR}""/""${subnum}""_dcm2bids.sh"
-    echo "Creating script ${SUBJ_SCRIPT} for subject ${subnum}
+    echo "Creating script ${SUBJ_SCRIPT} for subject ${subnum}"
     echo "echo \"Doing for subject: [$subnum]\"" > $SUBJ_SCRIPT
     
     echo "dcm2bids -d ${SubjectDataFolder} -p $subnum -c ${Configfile} -o ${TARGETDIR}" >> $SUBJ_SCRIPT
