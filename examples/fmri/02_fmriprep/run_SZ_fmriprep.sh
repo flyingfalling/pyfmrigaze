@@ -12,7 +12,7 @@ WORKDIR="/scratch/SZ_FMRIPREP_WORKSPACE"
 
 #EXTRAOPTS="--fs-no-reconall --nthreads $nthreads"
 dt="$(date '+%Y-%m-%d-%H-%M-%S')"
-EXTRAOPTS="" #-w $WORKDIR
+EXTRAOPTS="-w $WORKDIR"
 
 LOGFILE="/scratch/FMRIPREP_STDOUT_${dt}.out"
 
