@@ -4,6 +4,7 @@
 #REV: NOTE https://www.youtube.com/watch?v=4W6qBIpE404  (fmriprep walkthrough).
 
 INDIR=$1   #"/mnt/coishare/data/szfmri7t/SZ_gaze_fmri_BIDS_20251031/"
+
 OUTDIR=$INDIR"/derivatives/fmriprep"
 
 WORKDIR="/scratch/SZ_FMRIPREP_WORKSPACE"
@@ -12,13 +13,16 @@ WORKDIR="/scratch/SZ_FMRIPREP_WORKSPACE"
 
 #EXTRAOPTS="--fs-no-reconall --nthreads $nthreads"
 dt="$(date '+%Y-%m-%d-%H-%M-%S')"
-EXTRAOPTS="-w $WORKDIR"
+EXTRAOPTS=""
+EXTRAOPTS+="-w $WORKDIR"
+EXTRAOPTS+="--low-mem"
+EXTRAOPTS+="--mem-gb 400"
+EXTRAOPTS+="--nthreads 7"
+EXTRAOPTS+="--omp-nthreads 4"
 
 LOGFILE="/scratch/FMRIPREP_STDOUT_${dt}.out"
 
 echo "Tee-ing to [$LOGFILE]"
-
-
 
 
 fmriprep \
