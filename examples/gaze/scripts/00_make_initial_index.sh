@@ -5,6 +5,7 @@ EDFIDX=sz_edf_index.csv #REV: this is output.
 
 FREEVIEWINGDATADIR=/mnt/coishare/data/freeviewing/
 #FREEVIEWINGDATADIR=/home/riveale/richard_home/git/freeviewingsvn
+
 FMRIEDFDIR=$FREEVIEWINGDATADIR/data/fmri7t
 OUTSIDEEDFDIR=$FREEVIEWINGDATADIR/data/fmri7t_outside_sorted/
 
