@@ -8,11 +8,15 @@ FREEVIEWINGDATADIR=/mnt/coishare/data/freeviewing/
 FMRIEDFDIR=$FREEVIEWINGDATADIR/data/fmri7t
 OUTSIDEEDFDIR=$FREEVIEWINGDATADIR/data/fmri7t_outside_sorted/
 
-PATIENTIDXDIR=/mnt/coishare/data/szfmri7t/schizo_outofscanner_fromtaka/patient_info/
+PATIENTIDXDIR=/mnt/coishare/data/szfmri7t/data/patient_info/
+#PATIENTIDXDIR=/mnt/coishare/data/szfmri7t/schizo_outofscanner_fromtaka/patient_info/
 #PATIENTIDXDIR=/home/riveale/data/schizo_outofscanner_fromtaka/patient_info/   
 
-SZIDX=統合失調症患者_7期_心理検査データ_20250904.xlsx
-HCIDX=健常者_7期_心理検査データ_20250904_wpilots.xlsx
+#SZIDX=統合失調症患者_7期_心理検査データ_20250904.xlsx
+#HCIDX=健常者_7期_心理検査データ_20250904_wpilots.xlsx
+
+SZIDX=20260307/統合失調症患者_7期_心理検査データ_20260307.xlsx
+HCIDX=20260307/健常者_7期_心理検査データ_20260307.xlsx
 
 ## Computes index from subject data and EDF dir etc.
 python py/00_parse_SZ_index.py $PATIENTIDXDIR/$SZIDX $PATIENTIDXDIR/$HCIDX $FMRIEDFDIR $OUTSIDEEDFDIR

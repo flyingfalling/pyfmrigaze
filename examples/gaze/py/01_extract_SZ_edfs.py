@@ -14,10 +14,10 @@ def preproc_file(fn, out_csv_path, doplot=False):
     
     row, s, m, bt, b = pu.preproc_peyefv_edf(fn, out_csv_path=out_csv_path);
     
-    print(s);
-    print(bt);
-    print(b);
-    print(row);
+    #print(s);
+    #print(bt);
+    #print(b);
+    #print(row);
     
     row2 = { a:[row[a]] for a in row };
     row2df = pd.DataFrame(row2);
@@ -55,10 +55,8 @@ def parallel_preproc( mytup ):
 #######   end parallel    ############
 
 
-
-
 def main():
-    NPROC=None; #None; # none makes num_cpu
+    NPROC=28; #None; # none makes num_cpu
     
     alledfcsv=sys.argv[1];
     fmriedfdir=sys.argv[2];
@@ -71,12 +69,12 @@ def main():
         raise Exception("WTF couldn't make dir {}?".format(savecsvdir));
     
     alledf_df = pd.read_csv(alledfcsv);
-
+    print(alledf_df);
     #alledf_df=alledf_df.iloc[:5];
     
     ## REV: prepare to run it...
     rows = [ tuple((x[1], savecsvdir)) for x in alledf_df.iterrows() ];
-    
+    print("Will exec for {}".format(rows));
     MULTIPROC=True;
     results=list();
     if(MULTIPROC):

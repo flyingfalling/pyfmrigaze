@@ -4,7 +4,7 @@ BLOCKIDX=allfmriblocks.csv
 TRIALIDX=allfmritrials.csv
 EDFIDX2=allfmriedfs.csv
 EDFIDX=sz_edf_index.csv
-SAMPCSVDIR=./outcsvs/
+SAMPCSVDIR=/scratch/fmri7tcsvs/
 #VIDCONDCSV=vidcondgrps.csv
 
 FMRIEDFDIR=/mnt/coishare/data/freeviewing/data/fmri7t
