@@ -114,7 +114,9 @@ def main():
     rowcsv = sys.argv[1];
     csvdir = sys.argv[2];
     
-    rowdf = pd.read_csv(rowcsv);
+    rowdf = pd.read_csv(rowcsv); #REV: e.g. allfmriedfs.csv
+    
+    #REV: sanity check -- these should almost never happen at all and may alrady be dropped
     rowdf = rowdf.loc[ (rowdf['haseyetracking'] & (False==rowdf['edferror'])) ];
     #rowdf = rowdf[:5];
     results = list();

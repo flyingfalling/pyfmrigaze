@@ -25,6 +25,7 @@ def preproc_file(fn, out_csv_path, doplot=False):
     if(False == row['edferror'] and doplot ):
         plotit(row2df.iloc[0], out_csv_path);
         pass;
+    
     #print(df);
     return row2df;
 
@@ -95,6 +96,8 @@ def main():
     alledfs=list();
     for rowdf in results:
         row=rowdf.iloc[0];
+        
+        #REV: dropping EDFERROR here!
         if(False == row['edferror']):
             alledfs.append(rowdf);
             trialdf = pd.read_csv(os.path.join(savecsvdir, row['trials_csv']));
