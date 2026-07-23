@@ -34,6 +34,8 @@ def process_events(rowdic):
     else:
         dva_per_px = row['dva_per_px'];
         pass;
+
+    
     
     #REV these "times" will be correct because they are just rle (run-length encoding) of samples.
     blinkev = pu.preproc.blink_df_from_samples(df,
