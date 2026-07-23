@@ -14,7 +14,7 @@ def main():
     
     rowdf = pd.read_csv(rowcsv); #REV: e.g. allfmriedfs.csv
     
-    #rowdf = rowdf.loc[ (rowdf['haseyetracking'] & (False==rowdf['edferror'])) ];
+    rowdf = rowdf.loc[ (rowdf['haseyetracking'] & (False==rowdf['edferror'])) ];
     
     for i,row in rowdf.iterrows():
         print(row);
