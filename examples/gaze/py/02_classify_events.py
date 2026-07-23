@@ -125,7 +125,8 @@ def main():
     rowdf = rowdf.loc[ (rowdf['haseyetracking'] & (False==rowdf['edferror'])) ];
     #rowdf = rowdf[:5];
     results = list();
-    rows=[ dict(row=row,csvdir=csvdir) for i,row in rowdf.iterrows() ];
+    MAXTODO=-1; #10; #-1;
+    rows=[ dict(row=row,csvdir=csvdir) for i,row in rowdf.iterrows() ][:MAXTODO];
     
     
     MULTIPROC=True;
