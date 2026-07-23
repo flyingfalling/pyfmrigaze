@@ -28,7 +28,7 @@ def process_events(rowdic):
     if( 'dva_per_px' not in row ):
         dm=row['recinfo_VB_DM']
         ppm=row['recinfo_VB_PPM']
-        dva_per_m = pu.utils.get_center_dva_per_meter( distm, ppm );
+        dva_per_m = pu.utils.get_center_dva_per_meter( dm, ppm );
         dva_per_px = 1/ppm * dva_per_m;
         pass;
     else:
