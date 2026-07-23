@@ -35,7 +35,7 @@ def main():
         print(trialdf.columns);
         print(trialdf);
         
-        print("BLOCKS");
+        print("BLOCKS:");
         print(blockdf);
         
         pass;

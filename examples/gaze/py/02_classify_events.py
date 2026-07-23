@@ -1,7 +1,4 @@
 
-#REV: modify for new method
-
-
 ## REV: easier to make a "class" which takes a row (with specific names) and then it can access those with helper functions.
 ## E.g. based on what kind of file it is, get samples etc.? Can I add additional names?
 ##      So easiest thing is just to load the DF and it will create a chunk of classes?
@@ -22,38 +19,27 @@ def process_events(rowdic):
     
     samppath = os.path.join(csvdir, row['samples_csv']);
     df = pd.read_csv(samppath);
-    df2 = df[ df.eye=='B' ];
-    if(len(df2.index) < 1 ):
+
+    if(len(df.index) < 1 ):
         print(df);
         print("Any non-NAN? ", np.any(np.isfinite(df.cgx_dva)));
-        raise Exception("File {}: Binocular data is length 0 (full data is {})".format(len(df2.index), len(df.index)));
+        raise Exception("File {}: Binocular data is length 0 (full data is {})".format(len(df.index), len(df.index)));
     
-    df = df2;
     #REV these "times" will be correct because they are just rle (run-length encoding) of samples.
-    blinkev = pu.preproc.blink_df_from_samples(df);
+    blinkev = pu.preproc.blink_df_from_samples(df, badcol='bad', tcol='Tsec', dva_per_px=rowdic['dva_per_px']);
     blinkev['method'] = 'blink';
-    
-    import peyeutils.eyemovements.remodnav as rv;
 
     sr = row['recinfo_samplerate'];
-        
-    params1 = rv.make_default_preproc_params(samplerate_hzsec=sr,
-                                             timeunitsec=1,
-                                             dva_per_px=1, xname='cgx_dva',
-                                             yname='cgy_dva',
-                                             tname='Tsec');
-    #REV: TSEC this will be offset from beginning of EDF (not block...fuck).
     
-    params2 = rv.make_default_params(samplerate_hzsec=sr);
-    params = params1 | params2;
-    
-    
-    print("remodnav: preproc eyetrace");
-    rdf = rv.remodnav_preprocess_eyetrace2d(eyesamps=df, params=params);
-    rdf['method'] = 'remodnav';
-    
-    print("remodnav: classify");
-    ev = rv.remodnav_classify_events(rdf, params);
+    sdf, ev = pu.peyeutils.preproc_and_compute_events(
+        df = df,
+        tcol = 'Tsec',
+        xcol = 'cgx_dva',
+        ycol = 'cgy_dva',
+        sr_hzsec = sr,
+        mainseq_err_gain=1.5,
+        PLOT=False,
+    );
     
     ev = pd.concat( [ev, blinkev] );
     
@@ -65,7 +51,7 @@ def process_events(rowdic):
     
     return row; #Oh, this will not be a 1-row DF...
 
-
+'''
 def plotrow(rowdic):
     row=rowdic['row'];
     csvdir=rowdic['csvdir'];
@@ -109,6 +95,7 @@ def plotrow(rowdic):
         pass;
         
     return;
+'''
 
 def main():
     rowcsv = sys.argv[1];
@@ -124,7 +111,7 @@ def main():
     
     
     MULTIPROC=True;
-    NPROC=None;
+    NPROC=48;
     if(MULTIPROC):
         with Pool(processes=NPROC) as pool:
             results = pool.map(process_events, rows);
@@ -138,10 +125,10 @@ def main():
     
     rowdf = pd.DataFrame(results);
     print(rowdf);
-
-    for i, row in rowdf.iterrows():
-        plotrow(dict(row=row, csvdir=csvdir) );
-        pass;
+    
+    #for i, row in rowdf.iterrows():
+    #    plotrow(dict(row=row, csvdir=csvdir) );
+    #    pass;
     
     return 0;
 
