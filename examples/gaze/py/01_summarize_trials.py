@@ -31,7 +31,11 @@ def main():
         #samplesdf = pd.read_csv( os.path.join(csvdir, mytrials) );
 
         print("\n\n S: [{}]   KIND: [{}]  ({})".format(subjname, kind_inout, edfdatetime));
+        print("TRIALS:");
+        print(trialdf.columns);
         print(trialdf);
+        
+        print("BLOCKS");
         print(blockdf);
         
         pass;
