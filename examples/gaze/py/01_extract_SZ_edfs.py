@@ -36,7 +36,7 @@ def parallel_preproc( mytup ):
     fn = os.path.join(row['edfpath'], row['edffile']);
     out_csv_path = mytup[1];
     newrow = preproc_file( fn, out_csv_path );
-
+    
     for c in newrow.columns:
         if( c in row ):
             if( row[c] != newrow.iloc[0][c] ):
@@ -56,7 +56,7 @@ def parallel_preproc( mytup ):
 
 
 def main():
-    NPROC=28; #None; # none makes num_cpu
+    NPROC=12; #None; # none makes num_cpu
     
     alledfcsv=sys.argv[1];
     fmriedfdir=sys.argv[2];

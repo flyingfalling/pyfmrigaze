@@ -1,4 +1,6 @@
 
+#REV: modify for new method
+
 
 ## REV: easier to make a "class" which takes a row (with specific names) and then it can access those with helper functions.
 ## E.g. based on what kind of file it is, get samples etc.? Can I add additional names?
