@@ -57,7 +57,7 @@ def parallel_preproc( mytup ):
 
 
 def main():
-    NPROC=12; #None; # none makes num_cpu
+    NPROC=48; #None; # none makes num_cpu
     
     alledfcsv=sys.argv[1];
     fmriedfdir=sys.argv[2];
