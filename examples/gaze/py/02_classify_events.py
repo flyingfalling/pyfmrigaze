@@ -36,7 +36,13 @@ def process_events(rowdic):
         pass;
     
     #REV these "times" will be correct because they are just rle (run-length encoding) of samples.
-    blinkev = pu.preproc.blink_df_from_samples(df, badcol='bad', tcol='Tsec', dva_per_px=dva_per_px );
+    blinkev = pu.preproc.blink_df_from_samples(df,
+                                               badcol='bad',
+                                               tcol='Tsec',
+                                               xcol='cgx_dva',
+                                               ycol='cgy_dva',
+                                               eyecol='eye',
+                                               dva_per_px=dva_per_px );
     blinkev['method'] = 'blink';
 
     sr = row['recinfo_samplerate'];
