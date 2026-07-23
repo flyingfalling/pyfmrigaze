@@ -17,10 +17,26 @@ def main():
     rowdf = rowdf.loc[ (rowdf['haseyetracking'] & (False==rowdf['edferror'])) ];
     
     for i,row in rowdf.iterrows():
-        print(row);
-        pass;
+        #print(row);
+        mytrials=row['trials_csv'];
+        myblocks=row['blocks_csv'];
+        mysamples=row['samples_csv'];
+        myevents=row['events_csv'];
+        subjname=row['name'];
+        kind_inout=row['kind'];
+        edfdatetime=row['edfdatetime'];
 
-    print(rowdf);
+        trialdf = pd.read_csv( os.path.join(csvdir, mytrials) );
+        blockdf = pd.read_csv( os.path.join(csvdir, myblocks) );
+        #samplesdf = pd.read_csv( os.path.join(csvdir, mytrials) );
+
+        print("\n\n S: [{}]   KIND: [{}]  ({})".format(subjname, kind_inout, edfdatetime));
+        print(trialdf);
+        print(blockdf);
+        
+        pass;
+    
+    #print(rowdf);
     
     exit(0);
     
