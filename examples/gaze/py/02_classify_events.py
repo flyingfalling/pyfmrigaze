@@ -25,7 +25,15 @@ def process_events(rowdic):
         print("Any non-NAN? ", np.any(np.isfinite(df.cgx_dva)));
         raise Exception("File {}: Binocular data is length 0 (full data is {})".format(len(df.index), len(df.index)));
 
-    dva_per_px = row['dva_per_px'];
+    if( 'dva_per_px' not in row ):
+        dm=row['recinfo_VB_DM']
+        ppm=row['recinfo_VB_PPM']
+        dva_per_m = pu.utils.get_center_dva_per_meter( distm, ppm );
+        dva_per_px = 1/ppm * dva_per_m;
+        pass;
+    else:
+        dva_per_px = row['dva_per_px'];
+        pass;
     
     #REV these "times" will be correct because they are just rle (run-length encoding) of samples.
     blinkev = pu.preproc.blink_df_from_samples(df, badcol='bad', tcol='Tsec', dva_per_px=dva_per_px );
