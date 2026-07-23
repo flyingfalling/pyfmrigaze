@@ -61,7 +61,7 @@ def process_events(rowdic):
     
     ev = pd.concat( [ev, blinkev] );
     
-    evfname = row['edffile'] + '.events2.csv';
+    evfname = row['edffile'] + '.events2.csv'; #REV: need to add these after (I'm not saving over it)
     row['events2_csv'] = evfname;
     
     evpath = os.path.join( csvdir, evfname );
@@ -144,7 +144,9 @@ def main():
     
     rowdf = pd.DataFrame(results);
     print(rowdf);
-    
+
+    rowdf.to_csv('allfmriedfs_w_evs.csv', index=False); #REV: only added events2_csv
+    #row['edffile'] + '.events2.csv'
     #for i, row in rowdf.iterrows():
     #    plotrow(dict(row=row, csvdir=csvdir) );
     #    pass;
