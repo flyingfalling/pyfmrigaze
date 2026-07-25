@@ -40,17 +40,23 @@ mkdir -p ${SAMPCSVDIR}
 FMRIEDFDIR="${FREEVIEWINGDATADIR}/data/fmri7t"
 OUTSIDEEDFDIR="${FREEVIEWINGDATADIR}/data/fmri7t_outside_sorted/"
 
+echo "+++++++ 00 VIDGRPS"
 
 ## Just makes video groups
 python py/00_classify_vid_groups.py $VIDCLIPDIR
+
+echo "+++++++ 00 PARSE"
 
 ## Computes index from subject data and EDF dir etc.
 ## Index here means list of subjects etc.?
 python py/00_parse_SZ_index.py ${PATIENTIDXDIR}/${SZIDX} ${PATIENTIDXDIR}/${HCIDX} ${FMRIEDFDIR} ${OUTSIDEEDFDIR}
 
+echo "+++++++ 01 EXTRACT"
 
 ## Extracts trials etc. (multithreaded)
 ## REV: produces MASSIVE data CSVs...
 python py/01_extract_SZ_edfs.py ${EDFIDX} ${FMRIEDFDIR} ${OUTSIDEEDFDIR} ${SAMPCSVDIR}
 
+echo "+++++++ 02 CLASSIFY"
 
+python py/02_classify_events.py ${EDFIDX2} ${SAMPCSVDIR}

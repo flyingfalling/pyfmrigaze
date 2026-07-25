@@ -3,6 +3,7 @@
 ## E.g. based on what kind of file it is, get samples etc.? Can I add additional names?
 ##      So easiest thing is just to load the DF and it will create a chunk of classes?
 
+import traceback
 import pandas as pd;
 import sys;
 import os;
@@ -10,21 +11,31 @@ import peyeutils as pu;
 from multiprocessing import Pool;
 import numpy as np;
 
+
+def init_worker():
+    # Forces the child's text stream to flush after every single write
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+    return;
+
 def process_events(rowdic):
     row=rowdic['row'];
     csvdir=rowdic['csvdir'];
     
+    print("++++++++ DOING FOR: ", row['samples_csv']); #,flush=True);
+    
     if( row['edferror'] or not row['haseyetracking'] ):
-        raise Exception("Shouldn't be here?");
+        raise Exception("ERROR: Shouldn't be here?");
     
     samppath = os.path.join(csvdir, row['samples_csv']);
-    df = pd.read_csv(samppath);
-
+    df = pd.read_csv(samppath,);
+    #nrows=100);
+    
     if(len(df.index) < 1 ):
         print(df);
-        print("Any non-NAN? ", np.any(np.isfinite(df.cgx_dva)));
-        raise Exception("File {}: Binocular data is length 0 (full data is {})".format(len(df.index), len(df.index)));
-
+        print("ERROR: Any non-NAN? ", np.any(np.isfinite(df.cgx_dva)));
+        raise Exception("ERROR: File {}: Binocular data is length 0 (full data is {})".format(len(df.index), len(df.index)));
+    
     if( 'dva_per_px' not in row ):
         dm=row['recinfo_VB_DM']
         ppm=row['recinfo_VB_PPM']
@@ -34,8 +45,9 @@ def process_events(rowdic):
     else:
         dva_per_px = row['dva_per_px'];
         pass;
-
     
+    #if(True):
+    #    return row;
     
     #REV these "times" will be correct because they are just rle (run-length encoding) of samples.
     blinkev = pu.preproc.blink_df_from_samples(df,
@@ -46,8 +58,11 @@ def process_events(rowdic):
                                                eyecol='eye',
                                                dva_per_px=dva_per_px );
     blinkev['method'] = 'blink';
-
-    sr = row['recinfo_samplerate'];
+    
+    #sr = row['recinfo_samplerate'];
+    #REV: I need to specify what my SR *should* be?
+    #REV: note may be resampled?
+    sr = row['sr_hzsec'];
     
     sdf, ev = pu.peyeutils.preproc_and_compute_events(
         df = df,
@@ -66,6 +81,8 @@ def process_events(rowdic):
     
     evpath = os.path.join( csvdir, evfname );
     ev.to_csv(evpath, index=False);
+
+    print("+++++++ FINISHED FOR: ", row['samples_csv']); #,flush=True);
     
     return row; #Oh, this will not be a 1-row DF...
 
@@ -125,25 +142,44 @@ def main():
     rowdf = rowdf.loc[ (rowdf['haseyetracking'] & (False==rowdf['edferror'])) ];
     #rowdf = rowdf[:5];
     results = list();
+    MINTODO=490; #REV: I don't know which one "failed"...
     MAXTODO=-1; #10; #-1;
-    rows=[ dict(row=row,csvdir=csvdir) for i,row in rowdf.iterrows() ][:MAXTODO];
+    
+    todo = ['PYFREE_P012_SY_out_endrec_start_2024-08-14-15-27-55_end_2024-08-14-15-28-34.edf', 'PYFREE_FUKUDA_MIO_P007_endrec_start_2023-11-20-11-10-17_end_2023-11-20-11-10-23.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-50-28_end_2024-08-07-15-56-43.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-13-42-55_end_2025-11-10-13-49-42.edf', 'PYFREE_FUJII_RIEKO_C313_endrec_start_2023-08-07-13-39-23_end_2023-08-07-13-46-52.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-39-32_end_2024-08-07-15-46-23.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-37-59_end_2024-08-07-15-38-36.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-14-25-16_end_2025-11-10-14-25-54.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-13-58-30_end_2024-04-17-14-05-05.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-13-44-50_end_2024-04-17-13-55-25.edf', 'PYFREE_P015_AF_FMRI_endrec_start_2024-11-28-10-47-16_end_2024-11-28-10-54-10.edf', 'PYFREE_C343_out_endrec_start_2026-01-21-11-09-41_end_2026-01-21-11-14-56.edf', 'PYFREE_C321_MS_FMRI_endrec_start_2024-04-11-11-45-38_end_2024-04-11-11-52-42.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-14-35-30_end_2025-11-10-14-42-14.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-14-28-35_end_2024-04-17-14-29-45.edf', 'PYFREE_P012_SY_out_endrec_start_2024-08-14-15-36-53_end_2024-08-14-15-42-11.edf', 'PYFREE_FUJII_RIEKO_C313_endrec_start_2023-08-07-13-47-35_end_2023-08-07-13-54-33.edf']
+    
+    rows=[ dict(row=row,csvdir=csvdir) for i,row in rowdf.iterrows()  #];
+           if row['edffile'] in todo ];
+
+    print(rows);
+    print("Will proc for N EDFs: ", len(rows));
     
     
+    
+        
     MULTIPROC=True;
     NPROC=48;
     if(MULTIPROC):
-        with Pool(processes=NPROC) as pool:
-            results = pool.map(process_events, rows);
+        with Pool(processes=NPROC, initializer=init_worker) as pool:
+            try:
+                results = pool.map(process_events, rows);
+                print("Finished all rows (multiproc).");
+                pass;
+            except Exception as e:
+                traceback.print_exc();
+                raise Exception("(MULTIPROC EXCEPTION): {}".format(e));
+            
             pass;
         pass;
     else:
         for rowdict in rows:
             results.append( process_events( rowdict ) );
             pass;
+        print("Single threaded -- finished all rows");
         pass;
-    
+
+    print("Length of results: {}".format(len(results)));
     rowdf = pd.DataFrame(results);
-    print(rowdf);
+    #print(rowdf);
 
     rowdf.to_csv('allfmriedfs_w_evs.csv', index=False); #REV: only added events2_csv
     #row['edffile'] + '.events2.csv'
