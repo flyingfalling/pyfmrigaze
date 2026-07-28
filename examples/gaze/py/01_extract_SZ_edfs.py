@@ -1,18 +1,27 @@
 
 import peyeutils as pu;
 
+import traceback;
 import pandas as pd;
 import sys;
 import os;
 
 from multiprocessing import Pool;
 
+def init_worker():
+    # Forces the child's text stream to flush after every single write                              
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+    return;
+
 
 
 def preproc_file(fn, out_csv_path, doplot=False):
     print("Setting input EDF filename to [{}]".format(fn));
+
+    targ_sr_hzsec=1000;
     
-    row, s, m, bt, b = pu.preproc_peyefv_edf(fn, out_csv_path=out_csv_path);
+    row, s, m, bt, b = pu.preproc_peyefv_edf(fn, out_csv_path=out_csv_path, targ_sr_hzsec=targ_sr_hzsec);
     
     #print(s);
     #print(bt);
@@ -57,7 +66,7 @@ def parallel_preproc( mytup ):
 
 
 def main():
-    NPROC=12; #None; # none makes num_cpu
+    
     
     alledfcsv=sys.argv[1];
     fmriedfdir=sys.argv[2];
@@ -75,18 +84,29 @@ def main():
     
     ## REV: prepare to run it...
     rows = [ tuple((x[1], savecsvdir)) for x in alledf_df.iterrows() ];
-    print("Will exec for {}".format(rows));
+
+    print("Will exec for {} rows".format(len(rows)));
     MULTIPROC=True;
+    NPROC=48; #None; # none makes num_cpu
+    
     results=list();
     if(MULTIPROC):
-        with Pool(processes=NPROC) as pool:
-            results = pool.map(parallel_preproc, rows);
+        with Pool(processes=NPROC, initializer=init_worker) as pool:
+            try:
+                results = pool.map(parallel_preproc, rows);
+                print("Finished multiproc");
+                pass;
+            except Exception as e:
+                traceback.print_exc();
+                raise Exception("Got {}".format(e));
+            
             pass;
         pass;
     else:
         for row in rows:
             results.append( parallel_preproc(row) );
             pass;
+        print("finished single thread");
         pass;
     
     #REV: only non-error EDFs...

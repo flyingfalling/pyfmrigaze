@@ -8,14 +8,14 @@ echo "CSVs will be in: ${SAMPCSVDIR}"
 
 
 ### Laptop
-FREEVIEWINGDATADIR='/home/riveale/richard_home/git/freeviewingsvn/'
-PATIENTIDXDIR='/home/riveale/data/schizo_outofscanner_fromtaka/patient_info/'
-VIDCLIPDIR='/home/riveale/Desktop/stimuli/fmri_lab90c2/'
+#FREEVIEWINGDATADIR='/home/riveale/richard_home/git/freeviewingsvn/'
+#PATIENTIDXDIR='/home/riveale/data/schizo_outofscanner_fromtaka/patient_info/'
+#VIDCLIPDIR='/home/riveale/Desktop/stimuli/fmri_lab90c2/'
 
 ### COI cluster
-#FREEVIEWINGDATADIR='/mnt/coishare/data/freeviewing/'
-#PATIENTIDXDIR='/mnt/coishare/data/szfmri7t/data/patient_info/'
-#VIDCLIPDIR='/mnt/coishare/data/stimuli/fmri_lab90c2/'
+FREEVIEWINGDATADIR='/mnt/coishare/data/freeviewing/'
+PATIENTIDXDIR='/mnt/coishare/data/szfmri7t/data/patient_info/'
+VIDCLIPDIR='/mnt/coishare/data/stimuli/fmri_lab90c2/'
 
 
 SZIDX='/20260307/統合失調症患者_7期_心理検査データ_20260307.xlsx'
@@ -40,17 +40,23 @@ mkdir -p ${SAMPCSVDIR}
 FMRIEDFDIR="${FREEVIEWINGDATADIR}/data/fmri7t"
 OUTSIDEEDFDIR="${FREEVIEWINGDATADIR}/data/fmri7t_outside_sorted/"
 
+echo "+++++++ 00 VIDGRPS"
 
 ## Just makes video groups
 python py/00_classify_vid_groups.py $VIDCLIPDIR
+
+echo "+++++++ 00 PARSE"
 
 ## Computes index from subject data and EDF dir etc.
 ## Index here means list of subjects etc.?
 python py/00_parse_SZ_index.py ${PATIENTIDXDIR}/${SZIDX} ${PATIENTIDXDIR}/${HCIDX} ${FMRIEDFDIR} ${OUTSIDEEDFDIR}
 
+echo "+++++++ 01 EXTRACT"
 
 ## Extracts trials etc. (multithreaded)
 ## REV: produces MASSIVE data CSVs...
 python py/01_extract_SZ_edfs.py ${EDFIDX} ${FMRIEDFDIR} ${OUTSIDEEDFDIR} ${SAMPCSVDIR}
 
+echo "+++++++ 02 CLASSIFY"
 
+python py/02_classify_events.py ${EDFIDX2} ${SAMPCSVDIR}
