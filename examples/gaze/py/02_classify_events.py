@@ -46,7 +46,7 @@ def process_events(rowdic):
                                                eyecol='eye',
                                                dva_per_px=dva_per_px );
     blinkev['method'] = 'blink';
-
+    
     sr = row['recinfo_samplerate'];
     
     sdf, ev = pu.peyeutils.preproc_and_compute_events(
