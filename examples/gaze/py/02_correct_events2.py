@@ -48,11 +48,11 @@ if __name__=='__main__':
     
     if( len(missing) > 0 ):
         raise Exception("Failure, missing some!");
-
+    
     #rowdf = pd.concat(rows);
     rowdf = pd.DataFrame(rows);
     print(rowdf);
     
-    rowdf.to_csv(alledfs + '_w_events2.csv', index=False);
+    rowdf.to_csv(alledfs + '.w_events2.csv', index=False);
     exit(0);
     pass;

@@ -124,7 +124,7 @@ def process_events(rowdic):
         
         sr = row['sr_hzsec'];
         
-        sdf, ev = pu.peyeutils.preproc_and_compute_events(
+        sdf, ev, nogooddata = pu.peyeutils.preproc_and_compute_events(
             df = df,
             tcol = 'Tsec',
             xcol = 'cgx_dva',
@@ -133,16 +133,24 @@ def process_events(rowdic):
             mainseq_err_gain=1.5,
             PLOT=False,
         );
-
+        
         #print("AT END");
         #print( ev[ (ev.eye=='R') & (ev.label=='BLNK')] );
         #ev = pd.concat( [ev, blinkev] );
-        
-        evfname = row['edffile'] + '.events2.csv'; #REV: need to add these after (I'm not saving over it)
-        row['events2_csv'] = evfname;
-        
-        evpath = os.path.join( csvdir, evfname );
-        ev.to_csv(evpath, index=False);
+        if( nogooddata ):
+            print("Preproc/filtering has REMOVED ALL GOOD DATA [{}]. Setting haseyetracking to FALSE".format(row['samples_csv']));
+            #row['events2_csv'] = '';
+            row['haseyetracking'] = False;
+            pass;
+        else:
+            
+            evfname = row['edffile'] + '.events2.csv'; #REV: need to add these after (I'm not saving over it)
+            print("Preproc finished -- Saving events2 to [{}]".format(evfname));
+            row['events2_csv'] = evfname;
+            
+            evpath = os.path.join( csvdir, evfname );
+            ev.to_csv(evpath, index=False);
+            pass;
         
         print("+++++++ FINISHED FOR: ", row['samples_csv']); #,flush=True);
         pass; #With logfile thing.
@@ -202,19 +210,23 @@ def main():
     
     #REV: sanity check -- these should almost never happen at all and may alrady be dropped
     rowdf = rowdf.loc[ (rowdf['haseyetracking'] & (False==rowdf['edferror'])) ];
-    #rowdf = rowdf[:5];
+
+    #REV: init to default empty.
+    rowdf['events2_csv'] = '';
+    
     results = list();
-    #MINTODO=490; #REV: I don't know which one "failed"...
-    #MAXTODO=-1; #10; #-1;
-    
-    #todo = ['PYFREE_P012_SY_out_endrec_start_2024-08-14-15-27-55_end_2024-08-14-15-28-34.edf', 'PYFREE_FUKUDA_MIO_P007_endrec_start_2023-11-20-11-10-17_end_2023-11-20-11-10-23.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-50-28_end_2024-08-07-15-56-43.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-13-42-55_end_2025-11-10-13-49-42.edf', 'PYFREE_FUJII_RIEKO_C313_endrec_start_2023-08-07-13-39-23_end_2023-08-07-13-46-52.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-39-32_end_2024-08-07-15-46-23.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-37-59_end_2024-08-07-15-38-36.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-14-25-16_end_2025-11-10-14-25-54.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-13-58-30_end_2024-04-17-14-05-05.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-13-44-50_end_2024-04-17-13-55-25.edf', 'PYFREE_P015_AF_FMRI_endrec_start_2024-11-28-10-47-16_end_2024-11-28-10-54-10.edf', 'PYFREE_C343_out_endrec_start_2026-01-21-11-09-41_end_2026-01-21-11-14-56.edf', 'PYFREE_C321_MS_FMRI_endrec_start_2024-04-11-11-45-38_end_2024-04-11-11-52-42.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-14-35-30_end_2025-11-10-14-42-14.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-14-28-35_end_2024-04-17-14-29-45.edf', 'PYFREE_P012_SY_out_endrec_start_2024-08-14-15-36-53_end_2024-08-14-15-42-11.edf', 'PYFREE_FUJII_RIEKO_C313_endrec_start_2023-08-07-13-47-35_end_2023-08-07-13-54-33.edf']
-    
+
+    #todo = ['PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-37-59_end_2024-08-07-15-38-36.edf',
+    #];
+        
     log_path='/scratch/worker_logs';
         
     prep_log_directory(log_path);
-        
+    
+    
+    
     rows=[ dict(row=row,csvdir=csvdir,log_path=log_path) for i,row in rowdf.iterrows() ];
-    #if row['edffile'] in todo]
+    #if row['edffile'] in todo];
     
     
     print("Will proc for N EDFs: ", len(rows));

@@ -15,6 +15,7 @@ if __name__=='__main__':
     for i,row in df.iterrows():
         
         hasgaze=row['haseyetracking'];
+        edferr=row['edferror'];
         
         
         mytrials=row['trials_csv'];
@@ -43,7 +44,7 @@ if __name__=='__main__':
         print("\n\n S: [{}]   KIND: [{}]  ({})".format(subjname, kind_inout, edfdatetime));
         print("[{}]  [{}] trials   in [{}] blocks".format(origedf, ntrials, nblocks));
         
-        if( False == hasgaze ):
+        if( (False == hasgaze) or (True == edferr ) ):
             print("Skipping (no gaze)");
             continue;
 
@@ -52,7 +53,7 @@ if __name__=='__main__':
         
         lensec=sdf['Tsec'].max() - sdf['Tsec'].min();
 
-        print(edf[edf.eye=='R']);
+        #print(edf[edf.eye=='R']);
         
         
         nleye_samps = len(sdf[ sdf.eye == 'L' ].index);
@@ -99,13 +100,13 @@ if __name__=='__main__':
         medbsaccs = edf[ (edf.eye == 'B') & (edf.label == 'SACC') ].dursec.median();
         
         print("SACCS:");
-        if( nlsaccs > 0 ):
+        if( nlsaccs > 1 ):
             print("  LEFT: {:4d} saccs / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nlsaccs, dt*nleye_notna, nlsaccs/(nleye_notna*dt), 1e3*medlsaccs, 1e3*minlsaccs, 1e3*maxlsaccs) );
             pass;
-        if(nrsaccs > 0 ):
+        if(nrsaccs > 1 ):
             print("  RGHT: {:4d} saccs / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nrsaccs, dt*nreye_notna, nrsaccs/(nreye_notna*dt), 1e3*medrsaccs, 1e3*minrsaccs, 1e3*maxrsaccs) );
             pass;
-        if(nbsaccs > 0 ):
+        if(nbsaccs > 1 ):
             print("  BINO: {:4d} saccs / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nbsaccs, dt*nbeye_notna, nbsaccs/(nbeye_notna*dt), 1e3*medbsaccs, 1e3*minbsaccs, 1e3*maxbsaccs) );
             pass;
         
@@ -127,13 +128,13 @@ if __name__=='__main__':
         medbsaccblnks = edf[ (edf.eye == 'B') & (edf.label == 'SACCBLNK') ].dursec.median();
         
         print("SACC/BLNKS:");
-        if(nlsaccblnks > 0 ):
+        if(nlsaccblnks > 1 ):
             print("  LEFT: {:4d} saccs / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nlsaccblnks, dt*nleye_notna, nlsaccblnks/(nleye_notna*dt), 1e3*medlsaccblnks, 1e3*minlsaccblnks, 1e3*maxlsaccblnks) );
             pass;
-        if(nrsaccblnks > 0 ):
+        if(nrsaccblnks > 1 ):
             print("  RGHT: {:4d} saccs / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nrsaccblnks, dt*nreye_notna, nrsaccblnks/(nreye_notna*dt), 1e3*medrsaccblnks, 1e3*minrsaccblnks, 1e3*maxrsaccblnks) );
             pass;
-        if(nbsaccblnks > 0 ):
+        if(nbsaccblnks > 1 ):
             print("  BINO: {:4d} saccs / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nbsaccblnks, dt*nbeye_notna, nbsaccblnks/(nbeye_notna*dt), 1e3*medbsaccblnks, 1e3*minbsaccblnks, 1e3*maxbsaccblnks) );
             pass;
         
@@ -156,13 +157,13 @@ if __name__=='__main__':
         medbisis = edf[ (edf.eye == 'B') & (edf.label == 'ISI') ].dursec.median();
 
         print("ISIS:");
-        if(nlisis > 0 ):
+        if(nlisis > 1 ):
             print("  LEFT: {:4d} isis / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nlisis, dt*nleye_notna, nlisis/(nleye_notna*dt), 1e3*medlisis, 1e3*minlisis, 1e3*maxlisis) );
             pass;
-        if(nrisis > 0 ):
+        if(nrisis > 1 ):
             print("  RGHT: {:4d} isis / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nrisis, dt*nreye_notna, nrisis/(nreye_notna*dt), 1e3*medrisis, 1e3*minrisis, 1e3*maxrisis) );
             pass;
-        if(nbisis > 0 ):
+        if(nbisis > 1 ):
             print("  BINO: {:4d} isis / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nbisis, dt*nbeye_notna, nbisis/(nbeye_notna*dt), 1e3*medbisis, 1e3*minbisis, 1e3*maxbisis) );
             pass;
 
@@ -187,13 +188,13 @@ if __name__=='__main__':
         medbblnks = edf[ (edf.eye == 'B') & (edf.label == 'BLNK') ].dursec.median();
 
         print("BLINKS:");
-        if(nlblnks > 0 ):
+        if(nlblnks > 1 ):
             print("  LEFT: {:4d} blnks / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nlblnks, dt*nleye_notna, nlblnks/(nleye_notna*dt), 1e3*medlblnks, 1e3*minlblnks, 1e3*maxlblnks) );
             pass;
-        if(nrblnks > 0 ):
+        if(nrblnks > 1 ):
             print("  RGHT: {:4d} blnks / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nrblnks, dt*nreye_notna, nrblnks/(nreye_notna*dt), 1e3*medrblnks, 1e3*minrblnks, 1e3*maxrblnks) );
             pass;
-        if(nbblnks > 0 ):
+        if(nbblnks > 1 ):
             print("  BINO: {:4d} blnks / {:4.1f} secs ({:2.1f}/sec). DUR: {:4.1f} ({:4.1f}-{:4.1f})".format(nbblnks, dt*nbeye_notna, nbblnks/(nbeye_notna*dt), 1e3*medbblnks, 1e3*minbblnks, 1e3*maxbblnks) );
             pass;
 

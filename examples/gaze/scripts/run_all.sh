@@ -57,6 +57,6 @@ echo "+++++++ 01 EXTRACT"
 ## REV: produces MASSIVE data CSVs...
 python py/01_extract_SZ_edfs.py ${EDFIDX} ${FMRIEDFDIR} ${OUTSIDEEDFDIR} ${SAMPCSVDIR}
 
-echo "+++++++ 02 CLASSIFY"
 
-python py/02_classify_events.py ${EDFIDX2} ${SAMPCSVDIR}
+#echo "+++++++ 02 CLASSIFY"
+#python py/02_classify_events.py ${EDFIDX2} ${SAMPCSVDIR}
