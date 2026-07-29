@@ -8,81 +8,146 @@ import pandas as pd;
 import sys;
 import os;
 import peyeutils as pu;
-from multiprocessing import Pool;
+import multiprocessing as mp;
+#from multiprocessing import Pool;
+#from concurrent.futures import ProcessPoolExecutor, as_completed
+
 import numpy as np;
 
+from contextlib import contextmanager
 
+import shutil
+
+import pathlib
+
+import time;
+
+def prep_log_directory(log_dir_path):
+    """Call this ONCE in the main thread before starting the pool."""
+    log_path = pathlib.Path(log_dir_path)
+    if log_path.exists():
+        print("Clearing old log dir [{}]".format(log_path.as_posix()));
+        shutil.rmtree(log_path) # Nuke old files and folder
+        pass;
+    print("Creating (clean) log dir [{}]".format(log_path.as_posix()));
+    log_path.mkdir(parents=True, exist_ok=True) # Recreate empty folder
+    return;
+
+@contextmanager
+def redirect_to_file(log_path : pathlib.Path ):
+    # Create a 'logs' directory if it doesn't exist
+    
+    # Generate a unique log file using the current process ID
+    log_path = pathlib.Path(log_path) / f"worker_{os.getpid()}.log"
+    
+    # Open the file and redirect Python's standard output streams
+    with open(log_path, "a", buffering=1) as f:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = f
+        sys.stderr = f
+        try:
+            yield;
+        finally:
+            # Restore the original terminal streams when finished
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            pass;
+        pass;
+    return;
+
+
+'''
+import os
+# Force underlying C-libraries to use a single thread, preventing the pool deadlock
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+'''
+
+'''
 def init_worker():
     # Forces the child's text stream to flush after every single write
     sys.stdout.reconfigure(line_buffering=True)
     sys.stderr.reconfigure(line_buffering=True)
     return;
+'''
 
 def process_events(rowdic):
+    
     row=rowdic['row'];
     csvdir=rowdic['csvdir'];
     
-    print("++++++++ DOING FOR: ", row['samples_csv']); #,flush=True);
-    
-    if( row['edferror'] or not row['haseyetracking'] ):
-        raise Exception("ERROR: Shouldn't be here?");
-    
-    samppath = os.path.join(csvdir, row['samples_csv']);
-    df = pd.read_csv(samppath,);
-    #nrows=100);
-    
-    if(len(df.index) < 1 ):
-        print(df);
-        print("ERROR: Any non-NAN? ", np.any(np.isfinite(df.cgx_dva)));
-        raise Exception("ERROR: File {}: Binocular data is length 0 (full data is {})".format(len(df.index), len(df.index)));
-    
-    if( 'dva_per_px' not in row ):
-        dm=row['recinfo_VB_DM']
-        ppm=row['recinfo_VB_PPM']
-        dva_per_m = pu.utils.get_center_dva_per_meter( dm, ppm );
-        dva_per_px = 1/ppm * dva_per_m;
-        pass;
-    else:
-        dva_per_px = row['dva_per_px'];
-        pass;
-    
-    #if(True):
-    #    return row;
-    
-    #REV these "times" will be correct because they are just rle (run-length encoding) of samples.
-    blinkev = pu.preproc.blink_df_from_samples(df,
-                                               badcol='bad',
-                                               tcol='Tsec',
-                                               xcol='cgx_dva',
-                                               ycol='cgy_dva',
-                                               eyecol='eye',
-                                               dva_per_px=dva_per_px );
-    blinkev['method'] = 'blink';
-    
-    sr = row['sr_hzsec'];
-    
-    sdf, ev = pu.peyeutils.preproc_and_compute_events(
-        df = df,
-        tcol = 'Tsec',
-        xcol = 'cgx_dva',
-        ycol = 'cgy_dva',
-        sr_hzsec = sr,
-        mainseq_err_gain=1.5,
-        PLOT=False,
-    );
-    
-    ev = pd.concat( [ev, blinkev] );
-    
-    evfname = row['edffile'] + '.events2.csv'; #REV: need to add these after (I'm not saving over it)
-    row['events2_csv'] = evfname;
-    
-    evpath = os.path.join( csvdir, evfname );
-    ev.to_csv(evpath, index=False);
+    with redirect_to_file(rowdic['log_path']):
 
-    print("+++++++ FINISHED FOR: ", row['samples_csv']); #,flush=True);
-    
+        print("++++++++ DOING FOR: ", row['samples_csv']); #,flush=True);
+        
+        if( row['edferror'] or not row['haseyetracking'] ):
+            raise Exception("ERROR: Shouldn't be here?");
+        
+        samppath = os.path.join(csvdir, row['samples_csv']);
+        df = pd.read_csv(samppath,);
+        
+        if(len(df.index) < 1 ):
+            print(df);
+            print("ERROR: Any non-NAN? ", np.any(np.isfinite(df.cgx_dva)));
+            raise Exception("ERROR: File {}: Binocular data is length 0 (full data is {})".format(len(df.index), len(df.index)));
+        
+        if( 'dva_per_px' not in row ):
+            dm=row['recinfo_VB_DM']
+            ppm=row['recinfo_VB_PPM']
+            dva_per_m = pu.utils.get_center_dva_per_meter( dm, ppm );
+            dva_per_px = 1/ppm * dva_per_m;
+            pass;
+        else:
+            dva_per_px = row['dva_per_px'];
+            pass;
+        
+        #if(True):
+        #    return row;
+        
+        #REV these "times" will be correct because they are just rle (run-length encoding) of samples.
+        #REV: ah, why do I bother here? This creates "blink" from df, i.e. raw samples...
+        
+        #REV: this is not necessary because we already do this in "preprocess", and
+        # params like dva/px and badocl are passed through.
+        #blinkev = pu.preproc.blink_df_from_samples(df,
+        #                                           badcol='bad',
+        #                                           tcol='Tsec',
+        #                                           xcol='cgx_dva',
+        #                                           ycol='cgy_dva',
+        #                                           eyecol='eye',
+        #                                           dva_per_px=dva_per_px );
+        #blinkev['method'] = 'blink';
+        
+        sr = row['sr_hzsec'];
+        
+        sdf, ev = pu.peyeutils.preproc_and_compute_events(
+            df = df,
+            tcol = 'Tsec',
+            xcol = 'cgx_dva',
+            ycol = 'cgy_dva',
+            sr_hzsec = sr,
+            mainseq_err_gain=1.5,
+            PLOT=False,
+        );
+
+        #print("AT END");
+        #print( ev[ (ev.eye=='R') & (ev.label=='BLNK')] );
+        #ev = pd.concat( [ev, blinkev] );
+        
+        evfname = row['edffile'] + '.events2.csv'; #REV: need to add these after (I'm not saving over it)
+        row['events2_csv'] = evfname;
+        
+        evpath = os.path.join( csvdir, evfname );
+        ev.to_csv(evpath, index=False);
+        
+        print("+++++++ FINISHED FOR: ", row['samples_csv']); #,flush=True);
+        pass; #With logfile thing.
     return row; #Oh, this will not be a 1-row DF...
-
+    
 '''
 def plotrow(rowdic):
     row=rowdic['row'];
@@ -139,32 +204,61 @@ def main():
     rowdf = rowdf.loc[ (rowdf['haseyetracking'] & (False==rowdf['edferror'])) ];
     #rowdf = rowdf[:5];
     results = list();
-    MINTODO=490; #REV: I don't know which one "failed"...
-    MAXTODO=-1; #10; #-1;
+    #MINTODO=490; #REV: I don't know which one "failed"...
+    #MAXTODO=-1; #10; #-1;
     
-    todo = ['PYFREE_P012_SY_out_endrec_start_2024-08-14-15-27-55_end_2024-08-14-15-28-34.edf', 'PYFREE_FUKUDA_MIO_P007_endrec_start_2023-11-20-11-10-17_end_2023-11-20-11-10-23.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-50-28_end_2024-08-07-15-56-43.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-13-42-55_end_2025-11-10-13-49-42.edf', 'PYFREE_FUJII_RIEKO_C313_endrec_start_2023-08-07-13-39-23_end_2023-08-07-13-46-52.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-39-32_end_2024-08-07-15-46-23.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-37-59_end_2024-08-07-15-38-36.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-14-25-16_end_2025-11-10-14-25-54.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-13-58-30_end_2024-04-17-14-05-05.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-13-44-50_end_2024-04-17-13-55-25.edf', 'PYFREE_P015_AF_FMRI_endrec_start_2024-11-28-10-47-16_end_2024-11-28-10-54-10.edf', 'PYFREE_C343_out_endrec_start_2026-01-21-11-09-41_end_2026-01-21-11-14-56.edf', 'PYFREE_C321_MS_FMRI_endrec_start_2024-04-11-11-45-38_end_2024-04-11-11-52-42.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-14-35-30_end_2025-11-10-14-42-14.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-14-28-35_end_2024-04-17-14-29-45.edf', 'PYFREE_P012_SY_out_endrec_start_2024-08-14-15-36-53_end_2024-08-14-15-42-11.edf', 'PYFREE_FUJII_RIEKO_C313_endrec_start_2023-08-07-13-47-35_end_2023-08-07-13-54-33.edf']
+    #todo = ['PYFREE_P012_SY_out_endrec_start_2024-08-14-15-27-55_end_2024-08-14-15-28-34.edf', 'PYFREE_FUKUDA_MIO_P007_endrec_start_2023-11-20-11-10-17_end_2023-11-20-11-10-23.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-50-28_end_2024-08-07-15-56-43.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-13-42-55_end_2025-11-10-13-49-42.edf', 'PYFREE_FUJII_RIEKO_C313_endrec_start_2023-08-07-13-39-23_end_2023-08-07-13-46-52.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-39-32_end_2024-08-07-15-46-23.edf', 'PYFREE_P012_SY_FMRI_endrec_start_2024-08-07-15-37-59_end_2024-08-07-15-38-36.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-14-25-16_end_2025-11-10-14-25-54.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-13-58-30_end_2024-04-17-14-05-05.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-13-44-50_end_2024-04-17-13-55-25.edf', 'PYFREE_P015_AF_FMRI_endrec_start_2024-11-28-10-47-16_end_2024-11-28-10-54-10.edf', 'PYFREE_C343_out_endrec_start_2026-01-21-11-09-41_end_2026-01-21-11-14-56.edf', 'PYFREE_C321_MS_FMRI_endrec_start_2024-04-11-11-45-38_end_2024-04-11-11-52-42.edf', 'PYFREE_C338_FMRI_endrec_start_2025-11-10-14-35-30_end_2025-11-10-14-42-14.edf', 'PYFREE_P010_IY_FMRI_endrec_start_2024-04-17-14-28-35_end_2024-04-17-14-29-45.edf', 'PYFREE_P012_SY_out_endrec_start_2024-08-14-15-36-53_end_2024-08-14-15-42-11.edf', 'PYFREE_FUJII_RIEKO_C313_endrec_start_2023-08-07-13-47-35_end_2023-08-07-13-54-33.edf']
     
-    rows=[ dict(row=row,csvdir=csvdir) for i,row in rowdf.iterrows()  #];
-           if row['edffile'] in todo ];
-
-    print(rows);
+    log_path='/scratch/worker_logs';
+        
+    prep_log_directory(log_path);
+        
+    rows=[ dict(row=row,csvdir=csvdir,log_path=log_path) for i,row in rowdf.iterrows() ];
+    #if row['edffile'] in todo]
+    
+    
     print("Will proc for N EDFs: ", len(rows));
     
     
+    #mp.set_start_method('spawn', force=True);
+
+    starttime=time.time();
     
-        
     MULTIPROC=True;
     NPROC=48;
+    results=list();
     if(MULTIPROC):
-        with Pool(processes=NPROC, initializer=init_worker) as pool:
+        #with ProcessPoolExecutor(max_workers=NPROC) as executor:
+        with mp.Pool(processes=NPROC) as pool:
+                     #, initializer=init_worker)
+            
+            #try:
+            #results = list(executor.map(process_events, rows, chunksize=1));
+            #futures = {executor.submit(process_events, row): row for row in rows};
+            #results = list(executor.map(process_events, rows, chunksize=1));
+            #results = pool.map(process_events, rows);
+            #    pass;
+            #except Exception as e:
+            #    
+            #    raise Exception("(MULTIPROC EXCEPTION): {}".format(e));
             try:
-                results = pool.map(process_events, rows);
-                print("Finished all rows (multiproc).");
+                futures = pool.imap_unordered(process_events, rows);
+                for result in futures:
+                    results.append(result);
+                    elapsed=time.time()-starttime;
+                    print("{:6.1f}s   {:6d}/{:6d} ({:4.1f}%) -- Finished [{}]".format(elapsed, len(results), len(rows), len(results)/len(rows)*100, result['edffile']));
                 pass;
             except Exception as e:
                 traceback.print_exc();
-                raise Exception("(MULTIPROC EXCEPTION): {}".format(e));
-            
+                print(f"Exception caught: {e}. Force-terminating all workers immediately.")
+                
+                # 2. Native, safe kill method (No PID hacking required)
+                pool.terminate()
+                
+                # 3. Clean up the process table so no zombies are left
+                pool.join()
+                
+                raise e;
             pass;
         pass;
     else:
@@ -173,16 +267,14 @@ def main():
             pass;
         print("Single threaded -- finished all rows");
         pass;
-
+    
     print("Length of results: {}".format(len(results)));
     rowdf = pd.DataFrame(results);
-    #print(rowdf);
-
-    rowdf.to_csv('allfmriedfs_w_evs.csv', index=False); #REV: only added events2_csv
-    #row['edffile'] + '.events2.csv'
-    #for i, row in rowdf.iterrows():
-    #    plotrow(dict(row=row, csvdir=csvdir) );
-    #    pass;
+    print(rowdf);
+    outfn=rowcsv+'.w_events2.csv';
+    print("Outputting CSV to {}".format(outfn));
+    rowdf.to_csv(outfn, index=False);
+    
     
     return 0;
 

@@ -51,6 +51,8 @@ if __name__=='__main__':
         edf = pd.read_csv( os.path.join(csvdir, myevents ) );
         
         lensec=sdf['Tsec'].max() - sdf['Tsec'].min();
+
+        print(edf[edf.eye=='R']);
         
         
         nleye_samps = len(sdf[ sdf.eye == 'L' ].index);
