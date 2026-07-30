@@ -56,11 +56,16 @@ def make_heatmap(subjvids):
                 xticklabels=True,
                 yticklabels=True,
             )
-        ax.set_yticklabels(ax.get_yticklabels(), rotation=90, va="center", fontsize=8)
-        
-        # Move the y-axis labels to the right side if the colorbar blocks them
+                
         ax.yaxis.tick_right()
         ax.yaxis.set_label_position("right")
+
+        # FORCE standard 90-degree vertical orientation across all active ticks
+        ax.tick_params(axis='y', labelsize=8, rotation=0)
+        
+        # Move the y-axis labels to the right side if the colorbar blocks them
+        
+        
 
         # Adjust margins to give text labels breathing room
         plt.subplots_adjust(bottom=0.25, right=0.92, left=0.1)
@@ -255,15 +260,18 @@ def main():
     trgrps = trdf.groupby('myidx');
     evgrps = evdf.groupby('myidx');
     sagrps = sadf.groupby('myidx');
-
+    
     print( "TR {}   EV {}  SR {}".format(len(trgrps.groups), len(evgrps.groups), len(sagrps.groups), ));
 
 
     subjvids=list();
+
+
     for key in trgrps.groups:
         mytrdf=trgrps.get_group(key);
         subj=mytrdf.iloc[0]['name'];
         vid=mytrdf.iloc[0]['video'];
+        myidx=mytrdf.iloc[0]['myidx'];
 
         print();
         print(key);
@@ -282,9 +290,144 @@ def main():
         ratgood=ngood/nsamp;
         
         goodsecs = ratgood * lensec;
-        subjvids.append( dict(subj=subj, vid=vid, goodsecs=goodsecs, ) );
-        thresh=0.5;
-        if( ratgood > thresh ): #REV: how "much" of a trial do they need to "watch" lol.
+        subjvids.append( dict(subj=subj, vid=vid, goodsecs=goodsecs, myidx=myidx,) );
+        pass;
+        
+    subjvids = pd.DataFrame( subjvids );
+    vidstoview = trdf[ trdf['grp'].isin(['C', 'D']) ]; # fix group! and not practice
+    vidstoview = vidstoview.video.unique();
+    print(vidstoview, len(vidstoview));
+    
+    # Filter for valid views, group by video, and keep videos matching the total subject count
+    # 1. Count videos per subject (with >= 6 seconds)
+    subjvids = subjvids[ subjvids.vid.isin(vidstoview) ];
+    
+    
+    
+    print("SUBJVIDS");
+    print(subjvids);
+        
+    subjvids = subjvids.loc[subjvids.groupby(['subj', 'vid'])['goodsecs'].idxmax()]
+    
+    make_heatmap(subjvids);    
+    make_tradeoff_curves(subjvids);    
+    
+    
+    ############ NOW WE SELECTED VIDEOS #############
+    
+    
+    MINLOOKTIME_SEC=4;
+    MIN_NSUBJ = 40;
+    
+    # Create binary matrix (subjects as rows, videos as columns)
+    matrix = (subjvids.pivot(index='subj', columns='vid', values='goodsecs') > MINLOOKTIME_SEC).astype(int)
+        
+    # 2. Get the exact names/IDs of the top N most active subjects
+    chosen_subjs = matrix.sum(axis=1).sort_values(ascending=False).index[:MIN_NSUBJ]
+    
+    # 3. Filter the matrix to only these subjects
+    sub_subset = matrix.loc[chosen_subjs]
+    
+    # 4. Find videos watched >6s by ALL of these chosen subjects
+    all_watched_mask = (sub_subset.sum(axis=0) == MIN_NSUBJ)
+    chosen_vids = all_watched_mask[all_watched_mask].index.tolist()
+    
+    # Convert subjects to a list for easy viewing
+    chosen_subjs = chosen_subjs.tolist()
+    
+    print(f"Keep these {len(chosen_subjs)} subjects: {chosen_subjs} (C: {len([c for c in chosen_subjs if c.startswith('C')])}  P: {len([c for c in chosen_subjs if c.startswith('P')])}\n")
+    print(f"Keep these {len(chosen_vids)} videos: {chosen_vids}")
+    
+    final_subjvids = subjvids[ subjvids['subj'].isin(chosen_subjs) &
+                               subjvids['vid'].isin(chosen_vids) ];
+
+    goodkeys = final_subjvids['myidx'].tolist();
+    print(len(goodkeys)); #REV: OK 1600 for 40x40
+    
+        
+    ##### Given the subset of videos (and subjs), we will compute parameters and save
+    ##### However, parameters will be coalesced "per-subject"
+    ##### Ignoring actual videos...
+    #####   For scanpath, should it be "union over all videos" (per unit time)?
+    #####    Or, "mean of scanpath/time of each video"? THE FORMER!
+    
+    allresults=list();
+    for subj, subjtrials in final_subjvids.groupby('subj'):
+        myevents = evdf[ evdf['myidx'].isin(subjtrials['myidx']) ];
+        mysamps = sadf[ sadf['myidx'].isin(subjtrials['myidx']) ];
+        print("Got {} unique trials for subj {}".format(len(mysamps['myidx'].unique()), subj));
+
+        totalwatch=final_subjvids['goodsecs'].sum();
+        
+        saccs = myevents[ myevents['label']=='SACC' ];
+        blnks = myevents[ myevents['label']=='BLNK' ];
+        isis = myevents[ myevents['label']=='ISI' ];
+
+        MAXBLNK_SEC=0.500;
+        
+        blnks = blnks[ blnks['dursec'] < MAXBLNK_SEC ]; #REV: otherwise it's just missing data...
+
+        BIGSMALL_CUTOFF=3
+        
+        myresult = dict(
+            subj=subj,
+            xmean=mysamps['cgx_dva'].mean(),
+            ymean=mysamps['cgy_dva'].mean(),
+            xstd=mysamps['cgx_dva'].std(),
+            ystd=mysamps['cgx_dva'].std(),
+            xyentropy=compute_kde_continuous_entropy(mysamps['cgx_dva'],
+                                                     mysamps['cgy_dva'],
+                                                     screen_width=12,
+                                                     screen_height=12,
+                                                     ),
+            blnk_rate=len(blnks.index)/totalwatch, #REV: could be missing data? Should use pupilsize
+            
+            scanpathlen=saccs['ampldva'].sum(),
+            
+            sacc_rate=len(saccs.index)/totalwatch,
+            sacc_ampl_med=saccs['ampldva'].median(),
+            sacc_ampl_std=saccs['ampldva'].std(),
+            
+            sacc_bigsmall3dva_ratio=len(saccs[ saccs['ampldva'] > BIGSMALL_CUTOFF ].index) / len(saccs[ saccs['ampldva'] <= BIGSMALL_CUTOFF ].index),
+            
+            isi_dur_med=isis['dursec'].median(),
+            isi_dur_std=isis['dursec'].std(),
+                        
+            #saccdur_med=saccs['ampldva'].median(),
+            #REV: saliency etc.
+            
+        );
+        allresults.append(myresult);
+        pass;
+
+    regressors=pd.DataFrame(allresults);
+    regressors.to_csv('allregressors.csv', index=False);
+    
+    '''
+    for key in goodkeys:
+        mytrdf=trgrps.get_group(key);
+        subj=mytrdf.iloc[0]['name'];
+        vid=mytrdf.iloc[0]['video'];
+        
+        print();
+        print(key);
+        
+        if( key not in sagrps.groups ):
+            raise Exception("Wtf has trial but not samples? [{}]".format(key));
+        
+        mysadf=sagrps.get_group(key);
+
+        #REV: shit, I will need to make a separate variable for each video! I.e. clip_01_xmean etc.
+        ## That way it can compare. Otherwise it will use the video identity to do classification.
+        
+        lensec=mysadf.Tsec.max() - mysadf.Tsec.min();
+        ngood = (~mysadf['bad']).sum();
+        nsamp = len(mysadf.index);
+        ratgood=ngood/nsamp;
+        
+        goodsecs = ratgood * lensec;
+        
+        if( goodsecs > MINLOOKTIME_SEC ): #REV: how "much" of a trial do they need to "watch" lol.
             print("SAMP: {:5d}/{:5d} = {:3.1f}%".format(ngood,nsamp, ratgood*100));
             #REV: don't use pupil (PA) as it is not normalized yet and so may give away subject.
             #(raw pupil area some subjects bigger pupils or closer/further position or different
@@ -319,72 +462,16 @@ def main():
             print("BLNK: {:3d}".format( len(myevdf[myevdf.label=='BLNK'].index)) );
             pass;
         pass; #REV: end for each in groupby(mygrp);
-    
-    subjvids = pd.DataFrame( subjvids );
-    vidstoview = trdf[ trdf['grp'].isin(['C', 'D']) ]; # fix group! and not practice
-    vidstoview = vidstoview.video.unique();
-    print(vidstoview, len(vidstoview));
-    
-    # Filter for valid views, group by video, and keep videos matching the total subject count
-    # 1. Count videos per subject (with >= 6 seconds)
-    subjvids = subjvids[ subjvids.vid.isin(vidstoview) ];
-    
-    print("SUBJVIDS");
-    print(subjvids);
-    
-    subjvids = subjvids.loc[subjvids.groupby(['subj', 'vid'])['goodsecs'].idxmax()]
+    '''
     
     
-    MINLOOKTIME_SEC=4;
-    
-    
-    # Create binary matrix (subjects as rows, videos as columns)
-    matrix = (subjvids.pivot(index='subj', columns='vid', values='goodsecs') > MINLOOKTIME_SEC).astype(int)
-    
-    # Sort subjects by total videos watched (descending)
-    sorted_subjs = matrix.sum(axis=1).sort_values(ascending=False).index
-    
-    results = []
-    for i in range(1, len(sorted_subjs) + 1):
-        # Keep the top 'i' most active subjects
-        sub_subset = matrix.loc[sorted_subjs[:i]]
-        
-        # Count videos watched by ALL subjects in this subset
-        shared_vids = (sub_subset.sum(axis=0) == i).sum()
-        
-        results.append({'num_subjects': i, 'num_videos': shared_vids})
-        pass;
-    
-    df_tradeoff = pd.DataFrame(results)
-    print(df_tradeoff)
-
-    N = 40;
-    
-    # 2. Get the exact names/IDs of the top N most active subjects
-    chosen_subjs = matrix.sum(axis=1).sort_values(ascending=False).index[:N]
-    
-    # 3. Filter the matrix to only these subjects
-    sub_subset = matrix.loc[chosen_subjs]
-    
-    # 4. Find videos watched >6s by ALL of these chosen subjects
-    all_watched_mask = (sub_subset.sum(axis=0) == N)
-    chosen_vids = all_watched_mask[all_watched_mask].index.tolist()
-    
-    # Convert subjects to a list for easy viewing
-    chosen_subjs = chosen_subjs.tolist()
-    
-    print(f"Keep these {len(chosen_subjs)} subjects: {chosen_subjs} (C: {len([c for c in chosen_subjs if c.startswith('C')])}  P: {len([c for c in chosen_subjs if c.startswith('P')])}\n")
-    print(f"Keep these {len(chosen_vids)} videos: {chosen_vids}")
-    
-    
-    
-    make_heatmap(subjvids);    
-    
-
-
-    make_tradeoff_curves(subjvids);    
-
     exit(0);
+
+
+    
+    
+    
+    
     
     
     
@@ -417,7 +504,7 @@ def main():
     valid_vids = df.groupby("vid").filter(
         lambda g: (g["goodsecs"] >= MINLOOKTIME_SEC).all() and (g["subj"].nunique() == total_subs)
     )["vid"].unique()
-
+    
     print(valid_vids);
     exit(0);
     
