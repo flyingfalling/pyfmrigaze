@@ -10,6 +10,10 @@ if __name__=='__main__':
     csvdir=sys.argv[2];
     
     df = pd.read_csv(alledfs);
+
+    df = df.sort_values(by=['name', 'kind',], ignore_index=True);
+    
+    kindstocheck=['outside'];
     
     rows=list();
     for i,row in df.iterrows():
@@ -28,7 +32,7 @@ if __name__=='__main__':
         subjname=row['name'];
         kind_inout=row['kind'];
         edfdatetime=row['edfdatetime'];
-        
+
         trialdf = pd.read_csv( os.path.join(csvdir, mytrials) );
         blockdf = pd.read_csv( os.path.join(csvdir, myblocks) );
         
@@ -38,16 +42,21 @@ if __name__=='__main__':
         #sdf = pd.read_csv(samppath);
         #if( not os.path.isfile(samppath) ):
         #    raise Exception("Expected samples missing [{}]".format(samppath));
-
+        
         ntrials = len(trialdf.index);
         nblocks = len(blockdf.index);
         print("\n\n S: [{}]   KIND: [{}]  ({})".format(subjname, kind_inout, edfdatetime));
         print("[{}]  [{}] trials   in [{}] blocks".format(origedf, ntrials, nblocks));
-        
+                
         if( (False == hasgaze) or (True == edferr ) ):
             print("Skipping (no gaze)");
             continue;
 
+        if( kind_inout not in kindstocheck ):
+            print("Skipping (not in checking types: {})".format(kindstocheck));
+            continue;
+        
+        
         sdf = pd.read_csv( os.path.join(csvdir, mysamples) );
         edf = pd.read_csv( os.path.join(csvdir, myevents ) );
         
