@@ -20,6 +20,11 @@ print("--- Loading Data and Extracting Targets ---")
 # Load the data from the CSV file
 df = pd.read_csv('allregressors.csv')
 
+EXCLUDE_CENTERBIAS=True;
+if(EXCLUDE_CENTERBIAS):
+    df = df[ [c for c in df.columns if 'centerbias' not in c ] ];
+    pass;
+#print(df[ [ c for c in df.columns if 'pupil' in c]] );
 # Ensure the 'subj' column is treated as a string, then extract 'C' or 'P'
 # This creates a new column called 'Class' based on the first letter
 df['Class'] = df['subj'].astype(str).apply(
