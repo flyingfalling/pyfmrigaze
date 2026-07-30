@@ -6,12 +6,41 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import numpy as np
-from scipy.stats import gaussian_kde
+from scipy.stats import gaussian_kde, zscore
+
+def compute_saccade_direction_ratios(df, angle_col='angle'):
+    """
+    Computes horizontal and vertical saccade ratios from directional angles.
+    Assumes angles are in degrees (e.g., 0 to 360, or -180 to 180).
+    """
+    # 1. Normalize all angles strictly to the [0, 360) degree range
+    angles_360 = np.mod(df[angle_col].to_numpy(), 360)
+    
+    # 2. Count horizontal saccades (0°/360° is East/Right, 180° is West/Left)
+    # Horizontal cones: [-45°, +45°] (315° to 360° AND 0° to 45°) and [135°, 225°]
+    is_horizontal = ((angles_360 >= 315) | (angles_360 <= 45)) | ((angles_360 >= 135) & (angles_360 <= 225));
+    
+    # 3. Count vertical saccades (90° is North/Up, 270° is South/Down)
+    # Vertical cones: [45°, 135°] and [225°, 315°]
+    is_vertical = ((angles_360 > 45) & (angles_360 < 135)) | ((angles_360 > 225) & (angles_360 < 315))
+    
+    total_saccades = len(angles_360)
+    if total_saccades == 0:
+        return {'horizontal_ratio': 0.0, 'vertical_ratio': 0.0}
+    
+    # 4. Calculate relative feature ratios (perfect for ML regressors)
+    features = {
+        'horizontal_ratio': np.sum(is_horizontal) / total_saccades,
+        'vertical_ratio': np.sum(is_vertical) / total_saccades
+    }
+    
+    return features;
+
 
 def make_heatmap(subjvids):
     print(len(subjvids.subj.unique()));
     print(len(subjvids.vid.unique()));
-
+    
     all_subjects = sorted(subjvids['subj'].dropna().unique())
     all_videos = sorted(subjvids['vid'].dropna().unique())
     
@@ -226,6 +255,15 @@ def main():
     eventscsv=sys.argv[2];
     samplscsv=sys.argv[3];
     
+    if( len(sys.argv) > 4 ):
+        minviewsecs=float(sys.argv[4]);
+        minviewsubjs=int(sys.argv[5]);
+        pass;
+    else:
+        minviewsecs=-1;
+        minviewsubjs=-1;
+        pass;
+    
     trdf = pd.read_csv(trialscsv);
     evdf = pd.read_csv(eventscsv);
     sadf = pd.read_csv(samplscsv);
@@ -315,224 +353,157 @@ def main():
     
     ############ NOW WE SELECTED VIDEOS #############
     
-    
-    MINLOOKTIME_SEC=4;
-    MIN_NSUBJ = 40;
-    
-    # Create binary matrix (subjects as rows, videos as columns)
-    matrix = (subjvids.pivot(index='subj', columns='vid', values='goodsecs') > MINLOOKTIME_SEC).astype(int)
-        
-    # 2. Get the exact names/IDs of the top N most active subjects
-    chosen_subjs = matrix.sum(axis=1).sort_values(ascending=False).index[:MIN_NSUBJ]
-    
-    # 3. Filter the matrix to only these subjects
-    sub_subset = matrix.loc[chosen_subjs]
-    
-    # 4. Find videos watched >6s by ALL of these chosen subjects
-    all_watched_mask = (sub_subset.sum(axis=0) == MIN_NSUBJ)
-    chosen_vids = all_watched_mask[all_watched_mask].index.tolist()
-    
-    # Convert subjects to a list for easy viewing
-    chosen_subjs = chosen_subjs.tolist()
-    
-    print(f"Keep these {len(chosen_subjs)} subjects: {chosen_subjs} (C: {len([c for c in chosen_subjs if c.startswith('C')])}  P: {len([c for c in chosen_subjs if c.startswith('P')])}\n")
-    print(f"Keep these {len(chosen_vids)} videos: {chosen_vids}")
-    
-    final_subjvids = subjvids[ subjvids['subj'].isin(chosen_subjs) &
-                               subjvids['vid'].isin(chosen_vids) ];
+    #MINLOOKTIME_SEC=4;
+    #MIN_NSUBJ = 40;
 
-    goodkeys = final_subjvids['myidx'].tolist();
-    print(len(goodkeys)); #REV: OK 1600 for 40x40
+    #minviewsecs_todo=range(3, 6, 1);
+    #minviewsubjs_todo=range(35, 51, 5);
+    mins_todo=list();
+    for a in range(35, 56, 10):
+        mins_todo.append((3, a));
+        pass;
+    
+    for a in range(35, 51, 5):
+        mins_todo.append((4, a));
+        pass;
+    
+    for a in range(35, 46, 5):
+        mins_todo.append((5, a));
+        pass;
+    
+    #for a in range(30, 36, 5):
+    #    mins_todo.append(6, a);
+    #    pass;
     
         
-    ##### Given the subset of videos (and subjs), we will compute parameters and save
-    ##### However, parameters will be coalesced "per-subject"
-    ##### Ignoring actual videos...
-    #####   For scanpath, should it be "union over all videos" (per unit time)?
-    #####    Or, "mean of scanpath/time of each video"? THE FORMER!
-    
-    allresults=list();
-    for subj, subjtrials in final_subjvids.groupby('subj'):
-        myevents = evdf[ evdf['myidx'].isin(subjtrials['myidx']) ];
-        mysamps = sadf[ sadf['myidx'].isin(subjtrials['myidx']) ];
-        print("Got {} unique trials for subj {}".format(len(mysamps['myidx'].unique()), subj));
-
-        totalwatch=final_subjvids['goodsecs'].sum();
-        
-        saccs = myevents[ myevents['label']=='SACC' ];
-        blnks = myevents[ myevents['label']=='BLNK' ];
-        isis = myevents[ myevents['label']=='ISI' ];
-
-        MAXBLNK_SEC=0.500;
-        
-        blnks = blnks[ blnks['dursec'] < MAXBLNK_SEC ]; #REV: otherwise it's just missing data...
-
-        BIGSMALL_CUTOFF=3
-        
-        myresult = dict(
-            subj=subj,
-            xmean=mysamps['cgx_dva'].mean(),
-            ymean=mysamps['cgy_dva'].mean(),
-            xstd=mysamps['cgx_dva'].std(),
-            ystd=mysamps['cgx_dva'].std(),
-            xyentropy=compute_kde_continuous_entropy(mysamps['cgx_dva'],
-                                                     mysamps['cgy_dva'],
-                                                     screen_width=12,
-                                                     screen_height=12,
-                                                     ),
-            blnk_rate=len(blnks.index)/totalwatch, #REV: could be missing data? Should use pupilsize
-            
-            scanpathlen=saccs['ampldva'].sum(),
-            
-            sacc_rate=len(saccs.index)/totalwatch,
-            sacc_ampl_med=saccs['ampldva'].median(),
-            sacc_ampl_std=saccs['ampldva'].std(),
-            
-            sacc_bigsmall3dva_ratio=len(saccs[ saccs['ampldva'] > BIGSMALL_CUTOFF ].index) / len(saccs[ saccs['ampldva'] <= BIGSMALL_CUTOFF ].index),
-            
-            isi_dur_med=isis['dursec'].median(),
-            isi_dur_std=isis['dursec'].std(),
-                        
-            #saccdur_med=saccs['ampldva'].median(),
-            #REV: saliency etc.
-            
-        );
-        allresults.append(myresult);
+    if( minviewsecs >= 0 and
+        minviewsubjs >= 0):
+        print("Doing for single pair of MINVIEWSEC / MINVIEWSUBJ");
+        minviewsecs_todo=[minviewsecs,];
+        minviewsubjs_todo=[minviewsubjs,];
         pass;
 
-    regressors=pd.DataFrame(allresults);
-    regressors.to_csv('allregressors.csv', index=False);
-    
-    '''
-    for key in goodkeys:
-        mytrdf=trgrps.get_group(key);
-        subj=mytrdf.iloc[0]['name'];
-        vid=mytrdf.iloc[0]['video'];
-        
-        print();
-        print(key);
-        
-        if( key not in sagrps.groups ):
-            raise Exception("Wtf has trial but not samples? [{}]".format(key));
-        
-        mysadf=sagrps.get_group(key);
-
-        #REV: shit, I will need to make a separate variable for each video! I.e. clip_01_xmean etc.
-        ## That way it can compare. Otherwise it will use the video identity to do classification.
-        
-        lensec=mysadf.Tsec.max() - mysadf.Tsec.min();
-        ngood = (~mysadf['bad']).sum();
-        nsamp = len(mysadf.index);
-        ratgood=ngood/nsamp;
-        
-        goodsecs = ratgood * lensec;
-        
-        if( goodsecs > MINLOOKTIME_SEC ): #REV: how "much" of a trial do they need to "watch" lol.
-            print("SAMP: {:5d}/{:5d} = {:3.1f}%".format(ngood,nsamp, ratgood*100));
-            #REV: don't use pupil (PA) as it is not normalized yet and so may give away subject.
-            #(raw pupil area some subjects bigger pupils or closer/further position or different
-            # ambient).
-            print("  X={:2.1f} ({:2.1f})  Y={:2.1f} ({:2.1f}),  PUPIL:{:2.1f} ({:2.1f})".format(
-                mysadf.cgx_dva.mean(),
-                mysadf.cgx_dva.std(),
-                mysadf.cgy_dva.mean(),
-                mysadf.cgy_dva.std(),
-                mysadf.pa_lpf.mean(),
-                mysadf.pa_lpf.std(),
-            ));
-        else:
-            print("Insufficient SAMPLES");
-        
-        if( key not in evgrps.groups ):
-            #print(mysadf[['Tsec', 'cgx_dva', 'cgy_dva']]);
+    all_regressors=list();
+    for minviewsecs, minviewsubjs in mins_todo:
+        if(True): #REV: skip level for indent.            
+            # Create binary matrix (subjects as rows, videos as columns)
+            matrix = (subjvids.pivot(index='subj', columns='vid', values='goodsecs') > minviewsecs).astype(int)
             
-            #import matplotlib.pyplot as plt;
-            #plt.plot(mysadf.Tsec, mysadf.cgx_dva, label='x');
-            #plt.plot(mysadf.Tsec, mysadf.cgy_dva, label='y');
-            #plt.legend();
-            #plt.savefig('test.pdf');
-            #raise Exception("Wtf has trial but not events? [{}]".format(key));
-            print("No events for [{}]".format(key));
-            pass;
-        else:
-            myevdf=evgrps.get_group(key);
+            # 2. Get the exact names/IDs of the top N most active subjects
+            chosen_subjs = matrix.sum(axis=1).sort_values(ascending=False).index[:minviewsubjs]
             
-            print("SACC: {:3d}".format( len(myevdf[myevdf.label=='SACC'].index)) );
-            print("ISI:  {:3d}".format( len(myevdf[myevdf.label=='ISI'].index)) );
-            print("BLNK: {:3d}".format( len(myevdf[myevdf.label=='BLNK'].index)) );
+            # 3. Filter the matrix to only these subjects
+            sub_subset = matrix.loc[chosen_subjs]
+            
+            # 4. Find videos watched >6s by ALL of these chosen subjects
+            all_watched_mask = (sub_subset.sum(axis=0) == minviewsubjs)
+            chosen_vids = all_watched_mask[all_watched_mask].index.tolist()
+            minviewvids=len(chosen_vids);
+            # Convert subjects to a list for easy viewing
+            chosen_subjs = chosen_subjs.tolist()
+            
+            print(f"Keep these {len(chosen_subjs)} subjects: {chosen_subjs} (C: {len([c for c in chosen_subjs if c.startswith('C')])}  P: {len([c for c in chosen_subjs if c.startswith('P')])}\n")
+            print(f"Keep these {len(chosen_vids)} videos: {chosen_vids}")
+            
+            final_subjvids = subjvids[ subjvids['subj'].isin(chosen_subjs) &
+                                       subjvids['vid'].isin(chosen_vids) ];
+            
+            goodkeys = final_subjvids['myidx'].tolist();
+            print(len(goodkeys)); #REV: OK 1600 for 40x40
+            
+            
+            ##### Given the subset of videos (and subjs), we will compute parameters and save
+            ##### However, parameters will be coalesced "per-subject"
+            ##### Ignoring actual videos...
+            #####   For scanpath, should it be "union over all videos" (per unit time)?
+            #####    Or, "mean of scanpath/time of each video"? THE FORMER!
+            
+            allresults=list();
+            for subj, subjtrials in final_subjvids.groupby('subj'):
+                myevents = evdf[ evdf['myidx'].isin(subjtrials['myidx']) ].copy();
+                mysamps = sadf[ sadf['myidx'].isin(subjtrials['myidx']) ].copy();
+                
+                print("Got {} unique trials for subj {} (minviews: {},{})".format(len(mysamps['myidx'].unique()), subj, minviewsecs, minviewsubjs));
+                
+                totalwatch=final_subjvids['goodsecs'].sum();
+                
+                saccs = myevents[ myevents['label']=='SACC' ];
+                blnks = myevents[ myevents['label']=='BLNK' ];
+                isis = myevents[ myevents['label']=='ISI' ];
+                
+                MAXBLNK_SEC=0.500;
+                
+                blnks = blnks[ blnks['dursec'] < MAXBLNK_SEC ]; #REV: otherwise it's just missing data...
+                
+                BIGSMALL_CUTOFF=3
+                dcenter=np.sqrt( (mysamps['cgx_dva']-mysamps['cgx_dva'].mean())**2 +
+                                 (mysamps['cgy_dva']-mysamps['cgy_dva'].mean())**2 );
+                
+                saccdirs = compute_saccade_direction_ratios(saccs);
+                
+                #REV: TODO
+                # BCEA (pursuit/fixation jitter, and within-ISI pathlength, i.e. sum derivative?)
+                # Fatigue (change in parameters for "later" trials in session/day versus "earlier").
+                # Saliency value at target (zscore, i.e. NSE);
+                
+                mysamps['pa_z'] = zscore(mysamps['pa_lpf'], nan_policy='omit');
+                myresult = dict(
+                    subj=subj,
+                    #xmean=mysamps['cgx_dva'].mean(),
+                    #ymean=mysamps['cgy_dva'].mean(),
+                    #xstd=mysamps['cgx_dva'].std(),
+                    #ystd=mysamps['cgx_dva'].std(),
+                    horiz_look_bias=mysamps['cgx_dva'].std()/mysamps['cgy_dva'].std(),
+                    mean_dist_baryxy=dcenter.mean(),
+                    pupilarea_zderiv=abs(mysamps['pa_z'].diff()).mean(),
+                    xyentropy=compute_kde_continuous_entropy(mysamps['cgx_dva'],
+                                                             mysamps['cgy_dva'],
+                                                             screen_width=10,
+                                                             screen_height=10,
+                                                             ),
+                    blnk_rate=len(blnks.index)/totalwatch, #REV: could be missing data? Should use pupilsize
+                    centerbias1_0dva=np.mean(dcenter<1),
+                    centerbias2_5dva=np.mean(dcenter<2.5),
+                    scanpath_persec=saccs['ampldva'].sum()/totalwatch,
+                    sacc_ampldur_mean=(saccs['ampldva']/saccs['dursec']).mean(), #REV: should fit a line? this will be biased by clustery values...not penalized by distance^2.
+                    sacc_rate=len(saccs.index)/totalwatch,
+                    sacc_ampl_med=saccs['ampldva'].median(),
+                    sacc_ampl_std=saccs['ampldva'].std(),
+                    #sacc_vert_ratio=saccdirs['vertical_ratio'],
+                    sacc_horiz_bias=saccdirs['horizontal_ratio'],
+                    
+                    sacc_smallbig1dva_ratio=len(saccs[ saccs['ampldva'] <= 1 ].index) / len(saccs[ saccs['ampldva'] > 1].index),
+                    
+                    sacc_smallbig3dva_ratio=len(saccs[ saccs['ampldva'] <= 3 ].index) / len(saccs[ saccs['ampldva'] > 3 ].index),
+                    
+                    #sacc_smallbig5dva_ratio=len(saccs[ saccs['ampldva'] <= 5 ].index) / len(saccs[ saccs['ampldva'] > 5 ].index),
+                    
+                    isi_dur_med=isis['dursec'].median(),
+                    isi_dur_std=isis['dursec'].std(),
+                    isi_vel_med=isis['avgvel'].median(),
+                    isi_vel_std=isis['avgvel'].std(), #REV: only fix or only pursuit, or mix of both?
+                    #isi_vel_med=isis['medvel'].median(),
+                    
+                    #saccdur_med=saccs['ampldva'].median(),
+                    #REV: saliency etc.
+                    
+                );
+                allresults.append(myresult);
+                pass;
+            
+            regressors=pd.DataFrame(allresults);
+            regressors['minviewsecs']=minviewsecs;
+            regressors['minviewsubjs']=minviewsubjs;
+            regressors['minviewvids']=minviewvids;
+            all_regressors.append(regressors);
             pass;
-        pass; #REV: end for each in groupby(mygrp);
-    '''
+        pass;
+    #regressors.to_csv('allregressors_minsec_{}_minsubj_{}.csv'.format(minviewsecs,minviewsubjs), index=False);
+    
+    all_regressors = pd.concat(all_regressors, ignore_index=True);
+    all_regressors.to_csv('allregressors.csv', index=False);
     
     
-    exit(0);
-
-
-    
-    
-    
-    
-    
-    
-    
-
-    
-    valid_views = subjvids[subjvids['goodsecs'] >= MINLOOKTIME_SEC]
-    videos_per_subject = valid_views.groupby('subj')['vid'].nunique()
-    
-    # 2. Define threshold (e.g., must watch at least 50% of all available videos)
-    min_videos = len(vidstoview) * 0.80;
-    good_subjects = videos_per_subject[videos_per_subject >= min_videos].reset_index(); #index
-    
-    print("GOOD SUBJS");
-    print(good_subjects);
-    print("JUST SUBJ COL");
-    print(good_subjects.subj);
-    print("N UNIQUE SUBJS (who seen >90% of videos)");
-    print(len(good_subjects.subj.unique()));
-    
-    
-    
-    
-    # 3. Filter the original dataframe
-    df = subjvids[ subjvids['subj'].isin(good_subjects.subj) ]
-    print(df);
-    
-    total_subs = df["subj"].nunique()
-    
-    # Filter videos watched > 6 seconds by all subjects
-    valid_vids = df.groupby("vid").filter(
-        lambda g: (g["goodsecs"] >= MINLOOKTIME_SEC).all() and (g["subj"].nunique() == total_subs)
-    )["vid"].unique()
-    
-    print(valid_vids);
-    exit(0);
-    
-    
-    
-    valid_views = subjvids[subjvids['goodsecs'] >= MINLOOKTIME_SEC]
-    total_subjects = subjvids['subj'].nunique()
-    print("Total {} subjs".format(total_subjects));
-    video_counts = valid_views.groupby('vid')['subj'].nunique();
-    print(video_counts);
-    
-    shared_videos = video_counts[video_counts == total_subjects].index.tolist()
-    
-    print("Vids seen by all subjs: ", shared_videos);
-    exit(0);
-    
-    
-    vids = subjvids.groupby('vid').filter(lambda x: (x['goodsecs'] >= MINLOOKTIME_SEC).all()).reset_index(drop=True)
-    print(subjvids.subj.unique());
-    print("GOOD vids:");
-    print(vids);
-    print("N GOOD", len(vids.index));
-    
-    subjvids = subjvids[ subjvids.vid.isin(vids) ];
-    if( subjvids.goodsecs.min() < MINLOOKTIME_SEC ):
-        raise Exception("WTF");
-    else:
-        print("Good");
     return 0;
 
 if __name__=='__main__':
