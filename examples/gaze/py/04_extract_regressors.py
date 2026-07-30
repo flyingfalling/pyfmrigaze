@@ -3,6 +3,49 @@ import pandas as pd
 import numpy as np
 import sys
 
+import numpy as np
+from scipy.stats import gaussian_kde
+
+def compute_kde_continuous_entropy(x_coords, y_coords, sample_grid_res=50,
+                                   screen_width, screen_height):
+    """
+    Computes continuous gaze entropy using non-parametric Kernel Density Estimation.
+    Independent of raw sample size.
+    """
+    x = np.asarray(x_coords)
+    y = np.asarray(y_coords)
+    valid = ~np.isnan(x) & ~np.isnan(y)
+    x, y = x[valid], y[valid];
+    
+    if len(x) < 5:  # KDE requires a baseline number of points to estimate bandwidth
+        return 0.0
+    
+    # Fit the continuous probability density function
+    positions = np.vstack([x, y])
+    kernel = gaussian_kde(positions)
+    
+    # Create a uniform evaluation mesh across the screen space
+    X, Y = np.meshgrid(np.linspace(0, screen_width, sample_grid_res),
+                       np.linspace(0, screen_height, sample_grid_res))
+    mesh_positions = np.vstack([X.ravel(), Y.ravel()])
+    
+    # Evaluate density at each mesh intersection point
+    pdf_values = kernel(mesh_positions)
+    
+    # Normalize density so it integrates to 1 over the area element
+    dx = screen_width / (sample_grid_res - 1)
+    dy = screen_height / (sample_grid_res - 1)
+    dA = dx * dy
+    
+    # Avoid log(0)
+    pdf_values = pdf_values[pdf_values > 1e-10]
+    
+    # Continuous entropy calculation via Riemann sum approximation
+    kde_entropy = -np.sum(pdf_values * np.log(pdf_values)) * dA
+    return kde_entropy
+
+
+
 def main():
     trialscsv=sys.argv[1];
     eventscsv=sys.argv[2];
@@ -54,17 +97,29 @@ def main():
             raise Exception("Wtf has trial but not samples? [{}]".format(key));
 
         mysadf=sagrps.get_group(key);
+
+        #REV: shit, I will need to make a separate variable for each video! I.e. clip_01_xmean etc.
+        ## That way it can compare. Otherwise it will use the video identity to do classification.
         
+        lensec=mysadf.Tsec.max() - mysadf.Tsec.min();
         ngood = (~mysadf['bad']).sum();
         nsamp = len(mysadf.index);
         ratgood=ngood/nsamp;
-        if( ratgood > 0.6 ):
+        goodsecs = ratgood * lensec;
+        thresh=0.5;
+        if( ratgood > thresh ): #REV: how "much" of a trial do they need to "watch" lol.
             print("SAMP: {:5d}/{:5d} = {:3.1f}%".format(ngood,nsamp, ratgood*100));
-            print("  X={:2.1f} ({:2.1f})  Y={:2.1f} ({:2.1f})".format(mysadf.cgx_dva.mean(),
-                                                                      mysadf.cgx_dva.std(),
-                                                                      mysadf.cgy_dva.mean(),
-                                                                      mysadf.cgy_dva.std(),
-                                                                      ));
+            #REV: don't use pupil (PA) as it is not normalized yet and so may give away subject.
+            #(raw pupil area some subjects bigger pupils or closer/further position or different
+            # ambient).
+            print("  X={:2.1f} ({:2.1f})  Y={:2.1f} ({:2.1f}),  PUPIL:{:2.1f} ({:2.1f})".format(
+                mysadf.cgx_dva.mean(),
+                mysadf.cgx_dva.std(),
+                mysadf.cgy_dva.mean(),
+                mysadf.cgy_dva.std(),
+                mysadf.pa_lpf.mean(),
+                mysadf.pa_lpf.std(),
+            ));
         else:
             print("Insufficient SAMPLES");
         

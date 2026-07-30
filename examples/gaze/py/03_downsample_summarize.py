@@ -68,12 +68,13 @@ if __name__=='__main__':
     df = df[ (df.kind=='outside') ];
 
     #REV: first 20.
-    df = df.iloc[:20];
+    NTODO=-1;
+    df = df.iloc[:NTODO];
     
     rows=list();
     for i,row in df.iterrows():
 
-        print("ROW COLUMNS: ", row.keys());
+        #print("ROW COLUMNS: ", row.keys());
         
         hasgaze=row['haseyetracking'];
         edferr=row['edferror'];
@@ -136,18 +137,18 @@ if __name__=='__main__':
             sdf_down = sdf.iloc[::keep_Nth, :];
             #sdf_down2 = sdf[sdf.reset_index().index % keep_Nth == 0].reset_index(drop=True); #sdf.iloc[::keep_Nth, :];
             #print(sdf_down);
-            print("SAMP COLUMNS: ", sdf_down.columns);
+            #print("SAMP COLUMNS: ", sdf_down.columns);
             pass;
         
         
-        print(blockdf.columns);
+        #print(blockdf.columns);
         for bi, brow in blockdf.iterrows():
             print("Block {:4d}  [{:5.1f} - {:5.1f}] (dur: {:3.1f} sec)  (FMRI start: {:5.1f})".format(brow.blkidx, brow.blkstart_s, brow.blkend_s, brow.blkend_s-brow.blkstart_s, brow.fmrist_s));
             
             mytrialsdf = trialdf[ trialdf.blkidx == brow.blkidx ].copy();
             
             
-            print(mytrialsdf.columns);
+            #print(mytrialsdf.columns);
             mytrialsdf = mytrialsdf.sort_values(by='start_s');
             mytrialsdf = pd.merge( left=mytrialsdf,
                                  right=vidconddf,
@@ -186,7 +187,7 @@ if __name__=='__main__':
             for c in row.keys():
                 #print("{}".format(c));
                 if c not in mytrialsdf.columns:
-                    print("Setting all trial [{}] to {}".format(c, row[c]));
+                    #print("Setting all trial [{}] to {}".format(c, row[c]));
                     mytrialsdf[c] = row[c];
                     pass;
                 pass;
