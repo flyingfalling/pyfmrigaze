@@ -2,12 +2,181 @@
 import pandas as pd
 import numpy as np
 import sys
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 import numpy as np
 from scipy.stats import gaussian_kde
 
-def compute_kde_continuous_entropy(x_coords, y_coords, sample_grid_res=50,
-                                   screen_width, screen_height):
+def make_heatmap(subjvids):
+    print(len(subjvids.subj.unique()));
+    print(len(subjvids.vid.unique()));
+
+    all_subjects = sorted(subjvids['subj'].dropna().unique())
+    all_videos = sorted(subjvids['vid'].dropna().unique())
+    
+    print(f"Target Dimensions -> Subjects: {len(all_subjects)} | Videos: {len(all_videos)}")
+    
+    FULL=True;
+    if(FULL):
+        # 2. Pivot using a method that safely keeps unique pairings
+        pivot_raw = subjvids.pivot_table(
+            index='subj',
+            columns='vid',
+            values='goodsecs',
+            aggfunc='max'
+        )
+        
+        # 3. FORCE the matrix to physically span across all 59 subjects and 60 videos
+        # Any blank cross-sections will explicitly become 0 instead of shrinking the grid
+        pivot_full = pivot_raw.reindex(index=all_subjects, columns=all_videos, fill_value=0)
+        print(f"Verified Matrix Form: {pivot_full.shape}") # Will strictly output (59, 60)
+
+        pivot_full = pivot_full.sort_index().fillna(0).astype(float)
+
+        # Verify no NaNs or Infs remain in the data structure
+        assert np.isfinite(pivot_full.values).all(), "Data still contains non-finite values!"
+
+
+        # Create a clean, standard figure canvas
+        fig, ax = plt.subplots(figsize=(18, 12))
+
+        # Use standard heatmap to eliminate hidden dendrogram margins
+        sns.heatmap(
+                pivot_full,
+                ax=ax,
+                cmap="viridis",
+                cbar_kws={
+                            "label": "Watch Time (goodsecs)",
+                            "location": "left",  # Places colorbar perfectly on the left edge
+                            "shrink": 0.4,  # Adjusts vertical height of the colorbar
+                        },
+                linewidths=0.05,
+                linecolor="#444444",
+                xticklabels=True,
+                yticklabels=True,
+            )
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=90, va="center", fontsize=8)
+        
+        # Move the y-axis labels to the right side if the colorbar blocks them
+        ax.yaxis.tick_right()
+        ax.yaxis.set_label_position("right")
+
+        # Adjust margins to give text labels breathing room
+        plt.subplots_adjust(bottom=0.25, right=0.92, left=0.1)
+
+        '''
+        # 4. Draw the uncorrupted 59x60 grid
+        g = sns.clustermap(
+            pivot_full,
+            cmap="viridis",
+            row_cluster=False,   # Disable vertical subject clustering
+            col_cluster=False,   # Disable horizontal video clustering
+            cbar_kws={"label": "Watch Time (goodsecs)"},
+            cbar_pos=(0.02, 0.5, 0.02, 0.2),
+            figsize=(18, 12),
+            linewidths=0.05,       # Keeps grid partitions extremely sharp
+            linecolor="#444444",   # Visible divider lines between adjacent cells
+            xticklabels=True,      # Disables automatic column truncation
+            yticklabels=True       # Disables automatic row truncation
+        )
+        
+        # 5. Prevent label cutoff at the canvas margins
+        plt.subplots_adjust(bottom=0.25, left=0.18)
+        '''
+        pass;
+
+    else:
+        
+        
+        ######## HEATMAP #########
+        # 1. Clean and aggregate to get the maximum trial watch time
+        df_clean = subjvids.dropna(subset=["goodsecs"])
+        df_max_trial = df_clean.loc[
+            df_clean.groupby(["subj", "vid"])["goodsecs"].idxmax()
+        ]
+        
+        # 2. Pivot into a subject-by-video matrix
+        pivot_df = df_max_trial.pivot(index="subj", columns="vid", values="goodsecs")
+        
+        # 3. Fill missing values with 0 (unwatched videos)
+        pivot_df_filled = pivot_df.fillna(0)
+        
+        # 4. Plot the hierarchical clustered heatmap
+        g = sns.clustermap(
+            pivot_df_filled,
+            cmap="viridis",  # Dark blue (0s) to bright yellow (max watch time)
+            cbar_kws={"label": "Watch Time (goodsecs)"},
+            figsize=(14, 10),
+            linewidths=0.1,
+            linecolor="gray",
+        )
+        
+        # Styling and adjustments
+        plt.setp(g.ax_heatmap.get_xticklabels(), rotation=90, fontsize=9)
+        plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0, fontsize=9)
+        g.fig.suptitle(
+            "Subject vs. Video Watch Times (Clustered Profile)",
+            fontsize=16,
+            fontweight="bold",
+            y=1.02,
+        )
+        pass;
+    
+    plt.savefig('subj_vid_watched_heatmap.pdf');
+    return;
+
+def make_tradeoff_curves(subjvids):
+    ######## TRADEOFF CURVE ##########
+    
+    
+    # 1. Ensure data is aggregated and pivoted (from your 'subjvids' DataFrame)
+    df_clean = subjvids.dropna(subset=['goodsecs'])
+    df_max_trial = df_clean.loc[df_clean.groupby(['subj', 'vid'])['goodsecs'].idxmax()]
+    pivot_df = df_max_trial.pivot(index='subj', columns='vid', values='goodsecs')
+    
+    # 2. Set up the figure
+    plt.figure(figsize=(12, 7))
+    
+    # Define the exact time lines you want to compare (e.g., 1 to 10 seconds)
+    seconds_to_plot = range(1, 10)
+    subject_counts = np.arange(1, len(pivot_df) + 1, 1)
+    
+    # 3. Calculate and plot a line for each second interval
+    for t in seconds_to_plot:
+        matrix_t = (pivot_df > t).astype(int)
+        
+        # Sort subjects by total videos watched at this threshold
+        sorted_subjs = matrix_t.sum(axis=1).sort_values(ascending=False).index
+        
+        video_counts = []
+        for s_count in subject_counts:
+            sub_subset = matrix_t.loc[sorted_subjs[:s_count]]
+            shared_vids = (sub_subset.sum(axis=0) == s_count).sum()
+            video_counts.append(shared_vids)
+            pass;
+        # Plot the line for the current second threshold
+        plt.plot(subject_counts, video_counts, label=f'{t} seconds', marker='o', markersize=3)
+        pass;
+    
+    # 4. Styling the 2D plot for scannability
+    plt.title('Video Survival Curves across Subject Counts', fontsize=14, fontweight='bold', pad=15)
+    plt.xlabel('Number of Subjects Kept (Most Active → Least Active)', fontsize=12)
+    plt.ylabel('Number of Videos Watched by ALL Kept Subjects', fontsize=12)
+    
+    plt.xticks(subject_counts, rotation=90) # Show every subject increment on X axis
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(title='Watch Threshold', bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    plt.tight_layout()
+    plt.savefig('time_subjects_vids_tradeoff.pdf');
+    
+    return;
+
+
+def compute_kde_continuous_entropy(x_coords, y_coords, 
+                                   screen_width, screen_height,
+                                   sample_grid_res=50,):
     """
     Computes continuous gaze entropy using non-parametric Kernel Density Estimation.
     Independent of raw sample size.
@@ -46,6 +215,7 @@ def compute_kde_continuous_entropy(x_coords, y_coords, sample_grid_res=50,
 
 
 
+
 def main():
     trialscsv=sys.argv[1];
     eventscsv=sys.argv[2];
@@ -60,6 +230,8 @@ def main():
     print(trdf.rest);
     
     trdf = trdf[ (trdf.ispract == 'no') & ~trdf.rest.isin(['pre','post']) ].copy().reset_index(drop=True);
+
+    
     
     print(trdf);
     
@@ -86,9 +258,12 @@ def main():
 
     print( "TR {}   EV {}  SR {}".format(len(trgrps.groups), len(evgrps.groups), len(sagrps.groups), ));
 
-    
+
+    subjvids=list();
     for key in trgrps.groups:
         mytrdf=trgrps.get_group(key);
+        subj=mytrdf.iloc[0]['name'];
+        vid=mytrdf.iloc[0]['video'];
 
         print();
         print(key);
@@ -105,7 +280,9 @@ def main():
         ngood = (~mysadf['bad']).sum();
         nsamp = len(mysadf.index);
         ratgood=ngood/nsamp;
+        
         goodsecs = ratgood * lensec;
+        subjvids.append( dict(subj=subj, vid=vid, goodsecs=goodsecs, ) );
         thresh=0.5;
         if( ratgood > thresh ): #REV: how "much" of a trial do they need to "watch" lol.
             print("SAMP: {:5d}/{:5d} = {:3.1f}%".format(ngood,nsamp, ratgood*100));
@@ -141,7 +318,134 @@ def main():
             print("ISI:  {:3d}".format( len(myevdf[myevdf.label=='ISI'].index)) );
             print("BLNK: {:3d}".format( len(myevdf[myevdf.label=='BLNK'].index)) );
             pass;
+        pass; #REV: end for each in groupby(mygrp);
+    
+    subjvids = pd.DataFrame( subjvids );
+    vidstoview = trdf[ trdf['grp'].isin(['C', 'D']) ]; # fix group! and not practice
+    vidstoview = vidstoview.video.unique();
+    print(vidstoview, len(vidstoview));
+    
+    # Filter for valid views, group by video, and keep videos matching the total subject count
+    # 1. Count videos per subject (with >= 6 seconds)
+    subjvids = subjvids[ subjvids.vid.isin(vidstoview) ];
+    
+    print("SUBJVIDS");
+    print(subjvids);
+    
+    subjvids = subjvids.loc[subjvids.groupby(['subj', 'vid'])['goodsecs'].idxmax()]
+    
+    
+    MINLOOKTIME_SEC=4;
+    
+    
+    # Create binary matrix (subjects as rows, videos as columns)
+    matrix = (subjvids.pivot(index='subj', columns='vid', values='goodsecs') > MINLOOKTIME_SEC).astype(int)
+    
+    # Sort subjects by total videos watched (descending)
+    sorted_subjs = matrix.sum(axis=1).sort_values(ascending=False).index
+    
+    results = []
+    for i in range(1, len(sorted_subjs) + 1):
+        # Keep the top 'i' most active subjects
+        sub_subset = matrix.loc[sorted_subjs[:i]]
         
+        # Count videos watched by ALL subjects in this subset
+        shared_vids = (sub_subset.sum(axis=0) == i).sum()
+        
+        results.append({'num_subjects': i, 'num_videos': shared_vids})
+        pass;
+    
+    df_tradeoff = pd.DataFrame(results)
+    print(df_tradeoff)
+
+    N = 40;
+    
+    # 2. Get the exact names/IDs of the top N most active subjects
+    chosen_subjs = matrix.sum(axis=1).sort_values(ascending=False).index[:N]
+    
+    # 3. Filter the matrix to only these subjects
+    sub_subset = matrix.loc[chosen_subjs]
+    
+    # 4. Find videos watched >6s by ALL of these chosen subjects
+    all_watched_mask = (sub_subset.sum(axis=0) == N)
+    chosen_vids = all_watched_mask[all_watched_mask].index.tolist()
+    
+    # Convert subjects to a list for easy viewing
+    chosen_subjs = chosen_subjs.tolist()
+    
+    print(f"Keep these {len(chosen_subjs)} subjects: {chosen_subjs} (C: {len([c for c in chosen_subjs if c.startswith('C')])}  P: {len([c for c in chosen_subjs if c.startswith('P')])}\n")
+    print(f"Keep these {len(chosen_vids)} videos: {chosen_vids}")
+    
+    
+    
+    make_heatmap(subjvids);    
+    
+
+
+    make_tradeoff_curves(subjvids);    
+
+    exit(0);
+    
+    
+    
+
+    
+    valid_views = subjvids[subjvids['goodsecs'] >= MINLOOKTIME_SEC]
+    videos_per_subject = valid_views.groupby('subj')['vid'].nunique()
+    
+    # 2. Define threshold (e.g., must watch at least 50% of all available videos)
+    min_videos = len(vidstoview) * 0.80;
+    good_subjects = videos_per_subject[videos_per_subject >= min_videos].reset_index(); #index
+    
+    print("GOOD SUBJS");
+    print(good_subjects);
+    print("JUST SUBJ COL");
+    print(good_subjects.subj);
+    print("N UNIQUE SUBJS (who seen >90% of videos)");
+    print(len(good_subjects.subj.unique()));
+    
+    
+    
+    
+    # 3. Filter the original dataframe
+    df = subjvids[ subjvids['subj'].isin(good_subjects.subj) ]
+    print(df);
+    
+    total_subs = df["subj"].nunique()
+    
+    # Filter videos watched > 6 seconds by all subjects
+    valid_vids = df.groupby("vid").filter(
+        lambda g: (g["goodsecs"] >= MINLOOKTIME_SEC).all() and (g["subj"].nunique() == total_subs)
+    )["vid"].unique()
+
+    print(valid_vids);
+    exit(0);
+    
+    
+    
+    valid_views = subjvids[subjvids['goodsecs'] >= MINLOOKTIME_SEC]
+    total_subjects = subjvids['subj'].nunique()
+    print("Total {} subjs".format(total_subjects));
+    video_counts = valid_views.groupby('vid')['subj'].nunique();
+    print(video_counts);
+    
+    shared_videos = video_counts[video_counts == total_subjects].index.tolist()
+    
+    print("Vids seen by all subjs: ", shared_videos);
+    exit(0);
+    
+    
+    vids = subjvids.groupby('vid').filter(lambda x: (x['goodsecs'] >= MINLOOKTIME_SEC).all()).reset_index(drop=True)
+    print(subjvids.subj.unique());
+    print("GOOD vids:");
+    print(vids);
+    print("N GOOD", len(vids.index));
+    
+    subjvids = subjvids[ subjvids.vid.isin(vids) ];
+    if( subjvids.goodsecs.min() < MINLOOKTIME_SEC ):
+        raise Exception("WTF");
+    else:
+        print("Good");
     return 0;
 
 if __name__=='__main__':
