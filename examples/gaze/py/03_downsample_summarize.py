@@ -22,7 +22,12 @@ if __name__=='__main__':
     
     df = pd.read_csv(alledfs);
     df = df.sort_values( by = ['name', 'kind'], ignore_index=True );
+    print("Subjs B4: ", df.name.unique());
     
+    df = df[ ((df['name'].str.startswith('C')) & (df['name'] >= 'C309')) |
+             ((df['name'].str.startswith('P')) & (df['name'] >= 'P001'))   ];
+    
+    print("Filtered: ", df.name.unique());
     rows=list();
     for i,row in df.iterrows():
         
@@ -54,11 +59,31 @@ if __name__=='__main__':
         ntrials = len(trialdf.index);
         nblocks = len(blockdf.index);
         print("\n\n S: [{}]   KIND: [{}]  ({})".format(subjname, kind_inout, edfdatetime));
-        print("[{}]  [{}] trials   in [{}] blocks".format(origedf, ntrials, nblocks));
-
+        print("  [{}]  [{}] trials, [{}] blks".format(origedf, ntrials, nblocks));
         
-        for bi, bdf in blockdf.iterrows():
-            print("Block {}  [{} - {}] (dur: {:3.1f} sec)  (FMRI start: {})".format(blkidx, blkstart_s, blnkend_s, blkend_s-blkstart_s, fmrist_s));
+        print(blockdf.columns);
+        for bi, brow in blockdf.iterrows():
+            print("Block {:4d}  [{:5.1f} - {:5.1f}] (dur: {:3.1f} sec)  (FMRI start: {:5.1f})".format(brow.blkidx, brow.blkstart_s, brow.blkend_s, brow.blkend_s-brow.blkstart_s, brow.fmrist_s));
+            
+            mytrials = trialdf[ trialdf.blkidx == brow.blkidx ];
+
+            
+            print(mytrials.columns);
+            mytrials = mytrials.sort_values(by='start_s');
+            firsttrial = mytrials.iloc[0];
+            lasttrial = mytrials.iloc[-1];
+            print("Got {} trials".format(len(mytrials.index)));
+            print("First trial from BLKSTART: {:3.1f}   from FMRISTART: {:3.1f} (FMRI offset was: {:3.1f})".format(firsttrial.start_s - brow.blkstart_s, firsttrial.start_s - brow.fmrist_s, firsttrial.fmri_offset_s));
+            
+            rest1_st = brow.fmrist_s;
+            rest1_en = firsttrial.start_s;
+            
+            rest2_st = lasttrial.end_s;
+            rest2_en = brow.blkend_s;
+
+            print("Rest 1 {:4.1f}-{:4.1f} ({:3.1f} sec)".format(rest1_st, rest1_en, rest1_en-rest1_st));
+            print("Rest 2 {:4.1f}-{:4.1f} ({:3.1f} sec)".format(rest2_st, rest2_en, rest2_en-rest2_st));
+            
             pass;
         
         
