@@ -51,10 +51,11 @@ if __name__=='__main__':
     rowkeepcols=['name', 'edfdatetime', 'edffile',];
 
     trialkeepcols=['start_s', 'end_s', 'video', 'vidw_px', 'vidh_px', 'vidxpos_px', 'vidypos_px',
-                'fmrist_s','fmri_offset_s', 'trialidx', 'blkidx', #'tcol',
+                   'fmrist_s','fmri_offset_s', 'trialidx', 'blkidx', 'rest', #'tcol',
                ];
 
-    blkkeepcols=['blkstart_s', 'blkend_s', 'blkidx', #'tcol',
+    blkkeepcols=['blkstart_s', 'blkend_s', 'blkidx', 'ispract', #'tcol',
+                 'APPA', 'grp'
              ];
     
     keepcols = sampkeepcols + evkeepcols + rowkeepcols + trialkeepcols + blkkeepcols;
@@ -173,11 +174,14 @@ if __name__=='__main__':
             
             #REV: set missing values from block, easier than joining because lot sof overlap
             # btw columns already...
-            mytrialsdf['blkstart_el'] = brow.blkstart_el;
-            mytrialsdf['blkend_el'] = brow.blkend_el;
+            for c in brow.keys():
+                if c not in mytrialsdf.columns:
+                    mytrialsdf[c] = brow[c];
+                    pass;
+                pass;
             
-            mytrialsdf['blkstart_s'] = brow.blkstart_s;
-            mytrialsdf['blkend_s'] = brow.blkend_s;
+            
+                
             
             for c in row.keys():
                 #print("{}".format(c));
@@ -186,7 +190,9 @@ if __name__=='__main__':
                     mytrialsdf[c] = row[c];
                     pass;
                 pass;
-                        
+
+            
+            
             firsttrial = mytrialsdf.iloc[0];
             lasttrial = mytrialsdf.iloc[-1];
             print("Got {} trials  (GRP: {}  APPA: {}  PRACT: {})".format(len(mytrialsdf.index), mygrp, myappa, ispract));
@@ -260,12 +266,22 @@ if __name__=='__main__':
             print("Rest 2 {:4.1f}-{:4.1f} ({:3.1f} sec)".format(rest2_st, rest2_en, rest2_en-rest2_st));
             
             myrests = pd.DataFrame([ prerest_row, postrest_row]);
+
+            for c in brow.keys():
+                if( c not in myrests ):
+                    myrests[c] = brow[c];
+                    pass;
+                pass;
             
             
             #newallrests.append(myrests);
             
             #REV: concat with rests
             mytrialsrests = pd.concat( [mytrialsdf, myrests], ignore_index=True );
+            
+            mytrialsrests = mytrialsrests[ [c for c in mytrialsrests.columns if c in keepcols] ];
+
+            
             newalltrialsrests.append(mytrialsrests);
             
             #REV: this could include noise at beginning of blah
@@ -467,9 +483,10 @@ if __name__=='__main__':
 
     trialsrests = pd.concat(newalltrialsrests, ignore_index=True);
     events = pd.concat(newallevents, ignore_index=True);
-
+    samps = pd.concat(newallsamps, ignore_index=True);
+    
     trialsrests.to_csv('summarized_trialsrests.csv', index=False);
     events.to_csv('summarized_events.csv', index=False);
-    
+    samps.to_csv('summarized_samps.csv', index=False);
     exit(0);
     pass;
