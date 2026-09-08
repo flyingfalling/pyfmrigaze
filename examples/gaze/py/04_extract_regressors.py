@@ -10,6 +10,9 @@ from scipy.stats import gaussian_kde, zscore
 
 import peyeutils as pu;
 
+import os;
+import cv2;
+
 def compute_saccade_direction_ratios(df, angle_col='angle'):
     """
     Computes horizontal and vertical saccade ratios from directional angles.
@@ -279,11 +282,23 @@ def points2d_to_pdensity2d(x_coords, y_coords,
 # 6. Example: Multiply it element-wise by a grayscale image
 
 #REV: shit I need to know size of video and convert to video coordinates (zero-centered and zeroed normally).
+
+#REV: viddf and saldf should contain info about where video (files) are located, samprate, etc.
+#REV: I guess we should have "flip" timing too but meh.
+#REV: saldf, likewise (just get video's salmap based on name and etc.).
+#REV: in DF, it has the salmap files and their types (lum, ori, etc.)? Or we just have a list.
+
+#REV: we could just have an open videoreader?
+#REV: hard-code a function get video name and salfile names. And extract information from there
+## (assume e.g. framerate is identical to when it was shown to subject).
 def compute_persubjvid_regressors(subj,
                                   mytrials,
                                   mysamps,
                                   myevents,
-                                  myedfs):
+                                  myedfs,
+                                  viddir,
+                                  saldir=''):
+    
     print(" PER VIDEO PER SUBJ: Subj={}".format(subj));
 
     #REV: theoretically, each person should have seen each video only once! 
@@ -325,9 +340,9 @@ def compute_persubjvid_regressors(subj,
         #REV: just take the first (and only) row, i.e. return a dict or record (sequence? series?) or whatever.
         recparams = myedf.iloc[0].to_dict();
         vidparams = subtrdf.iloc[0].to_dict();
-
-        vidw = vidparams['vidw_px'];
-        vidh = vidparams['vidh_px'];
+        print("MY VIDPARAMS: ", vidparams);
+        vidw = int(vidparams['vidw_px']);
+        vidh = int(vidparams['vidh_px']);
 
         vidw_m = vidparams['vidw_px'] / recparams['recinfo_VB_PPM'];
         vidh_m = vidparams['vidh_px'] / recparams['recinfo_VB_PPM'];
@@ -343,10 +358,89 @@ def compute_persubjvid_regressors(subj,
         
         #  start_s,end_s,video,vidw_px,vidh_px,vidxpos_px,vidypos_px,fmrist_s,fmri_offset_s,trialidx,blkidx,grp,
         ##  APPA,ispract,rest,blkstart_s,blkend_s,name,edfdatetime,edffile
+
+
+        #REV: OK now do actual computation and make videos etc.
+        #REV: note I should make "manysubj" video (after the fact). This is for saliency though.
+        #REV: I could make huge T*X*Y matrix (T timepoints, X wid, Y hei), and multiply by
+        #REV: a mask thing (T*X*Y) which represents the positive and negative samples.
+        #REV: then sum within timepoints (T) and take percentile of positives in negatives.
+
+        #REV: easier to do for all frames? Or for all gaze points (assuming 1/frame)?
+
+        vidsamps = mysamps[ mysamps['myidx'] == subtrdf.iloc[0]['myidx'] ].copy();
+        #print(vidsamps['cgx_px'].median());
+        #print(vidsamps['cgy_px'].median());
         
+        if( len(vidsamps.eye.unique()) != 1 ):
+            raise Exception("more than one eye's data in samples, you need to subset (maybe)");
+        
+        print("Got {} timepoints ({}-{})".format(len(vidsamps), vidsamps['Tsec'].min(), vidsamps['Tsec'].max()));
+        
+        ## REV: need access to video information. I.e. samplerate, time of each frame, etc.
+        ## REV: get "OG" video (for making pretty videos) and saliency videos too.
+
+        #REV: subj_vid_trial_gaze.mp4
+        
+        
+        vidpath=os.path.join(viddir, vidparams['grp'], myvid); #blah/A/clip_XXXX.mpg
+        
+        cap, framedf, capparams = pu.utils.read_video_timestamps(vidpath, timename='Tsec');
+        
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v");
+        outw = int(capparams['wpx'])//4;
+        outh = int(capparams['hpx'])//4;
+        
+        vw = cv2.VideoWriter('{}_{}.mkv'.format(subj, myvid),
+                             fourcc,
+                             capparams['fps'],
+                             (outw, outh) );
+        
+        dt = 1/capparams['fps'];
+        vidsamps['Tsec'] = vidsamps['Tsec'] - vidparams['start_s'];
+
+        #REV: I should zero-out blinks and saccades etc.?
+        
+        for i, row in framedf.iterrows():
+            vidt = row['Tsec'];
+            #print(vidparams['start_s']);
+            #print(vidparams['blkstart_s']);
+            #print(vidparams['fmri_offset_s']);
+            #print(vidparams['fmrist_s']);
+            #print(vidsamps["Tsec"]);
+            
+            tsamps = vidsamps[ (vidsamps['Tsec']>=vidt) & (vidsamps['Tsec']<(vidt+dt)) ];
+            
+            print("For t={}-{}".format(vidt, vidt+dt));
+            #print(tsamps);
+            ret, frame = cap.read();
+            if( False == ret ):
+                raise Exception("Expecting more frames but there are none?");
+            
+            frame = cv2.resize( frame, (vidw, vidh) );
+            gazex = tsamps['cgx_px'] + vidw/2;
+            gazey = tsamps['cgy_px'] + vidh/2;
+            gazey = vidh - gazey;
+            
+            for x,y in zip(gazex, gazey):
+                if( not np.isfinite(x) ):
+                    continue;
+                print('{}/{}, {}/{}'.format(int(x),vidw,int(y),vidh));
+                cv2.circle(img=frame,
+                           center=(int(x),int(y)),
+                           radius=5,
+                           color=(0,0,255),
+                           thickness=2,
+                           lineType=cv2.LINE_AA,
+                           );
+                pass;
+
+            frame = cv2.resize(frame, (outw, outh));
+            vw.write(frame);
+            pass;
         pass;
     
-    
+    vw.release();
     #REV: I can use cgx_px and cgy_px.
     #REV: However, for blurring etc., I should know how big the stimuli are. One method is simply divide the mean dva pos divided by mean px pos.
     #REV: that is a waste though. Better if something is passed through (dva/pix etc.?). But that is "mean". Better to have the ability to
@@ -443,6 +537,7 @@ def main():
     samplscsv=sys.argv[3];
     
     recedfcsv = sys.argv[4];
+    viddir = '/mnt/coishare/data/stimuli/fmri_lab90c2/';
     
     '''
     if( len(sys.argv) > 4 ):
@@ -504,8 +599,9 @@ def main():
         vid=mytrdf.iloc[0]['video'];
         myidx=mytrdf.iloc[0]['myidx'];
         edffile = mytrdf.iloc[0]['edffile'];
-
-        print();
+        grp = mytrdf.iloc[0]['grp'];
+        
+        
         print(key);
         
         if( key not in sagrps.groups ):
@@ -524,7 +620,7 @@ def main():
         goodsecs = ratgood * lensec;
 
         #REV: append other stuff such as edffile etc., which went into myidx?
-        subjvids.append( dict(subj=subj, vid=vid, goodsecs=goodsecs, myidx=myidx, edffile=edffile) );
+        subjvids.append( dict(subj=subj, vid=vid, goodsecs=goodsecs, myidx=myidx, edffile=edffile, grp=grp) );
         
         pass;
     
@@ -622,8 +718,6 @@ def main():
                 mysamps = sadf[ sadf['myidx'].isin(subjtrials['myidx']) ].copy();
                 mytrs = trdf[ trdf['myidx'].isin(subjtrials['myidx']) ].copy();
 
-                print(subjtrials.columns); #REV: shit this has only 'myidx' it lost orig cols.
-                print(recdf.columns);
                 myedfs = recdf[ recdf['edffile'].isin(subjtrials['edffile']) ].copy();
                 
                                 
@@ -634,7 +728,7 @@ def main():
                 
                 
                 print("----- COMPUTING *PER VIDEO* REGRESSORS ------");
-                persubjvid_results = compute_persubjvid_regressors(subj=subj, mytrials=mytrs, mysamps=mysamps, myevents=myevents, myedfs=myedfs);
+                persubjvid_results = compute_persubjvid_regressors(subj=subj, mytrials=mytrs, mysamps=mysamps, myevents=myevents, myedfs=myedfs, viddir=viddir);
                 
                 print("----- COMPUTING *PER SUBJECT* REGRESSORS ------");
                 persubj_results = compute_persubj_regressors(subj=subj, mysamps=mysamps, myevents=myevents, final_subjvids=final_subjvids);
