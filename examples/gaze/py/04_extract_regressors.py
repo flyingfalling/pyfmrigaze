@@ -263,7 +263,7 @@ def points2d_to_pdensity2d(x_coords, y_coords,
         y_coords, 
         x_coords, 
         bins=[nybins, nxbins],
-        range=[yxmin, ymax], [xmin, xmax]]
+        range=[[yxmin, ymax], [xmin, xmax]]
     );
     
     total_points = np.sum(hist); #number of points used to generate it (divide by this to ensure sum to 1)
@@ -298,7 +298,7 @@ def compute_persubjvid_regressors(subj,
         if( len(myedffile) != 1 ):
             raise Exception("Wtf more than one or not one EDF file? {}".format(myedffile));
         
-        myedf = recdf[ myedfs['edffile'] == myedffile ];
+        myedf = myedfs[ myedfs['edffile'] == myedffile ];
         if( len(myedf.index) != 1 ):
             raise Exception("Wtf edffile CSV has more than one row with identically named EDF file? -- REV: maybe separate by e.g. path? {}".format(myedf));
         
@@ -337,7 +337,7 @@ def compute_persubjvid_regressors(subj,
         vidhdva = np.degrees(np.arctan2(vidh_m/2, recparams['recinfo_VB_DM'] ) );
         vidhdva *= 2; #REV: because was half, centered triangle.
 
-        print("Video is shown at {} x {} dva".format(vidwdva, vidhdva));
+        print("Video {} for subj={} is shown at {} x {} dva".format(myvid, subj, vidwdva, vidhdva));
         
         #  start_s,end_s,video,vidw_px,vidh_px,vidxpos_px,vidypos_px,fmrist_s,fmri_offset_s,trialidx,blkidx,grp,
         ##  APPA,ispract,rest,blkstart_s,blkend_s,name,edfdatetime,edffile
@@ -361,6 +361,7 @@ def compute_persubjvid_regressors(subj,
         #  Also get information added.
         pass;
     '''
+    myresult=None;
     return myresult;
 
 
@@ -447,11 +448,11 @@ def main():
         minviewsecs=float(sys.argv[4]);
         minviewsubjs=int(sys.argv[5]);
         pass;
-    else:
-        minviewsecs=-1;
-        minviewsubjs=-1;
-        pass;
     '''
+    
+    minviewsecs=-1;
+    minviewsubjs=-1;
+
     
     trdf = pd.read_csv(trialscsv);
     evdf = pd.read_csv(eventscsv);
@@ -501,6 +502,7 @@ def main():
         subj=mytrdf.iloc[0]['name'];
         vid=mytrdf.iloc[0]['video'];
         myidx=mytrdf.iloc[0]['myidx'];
+        edffile = mytrdf.iloc[0]['edffile'];
 
         print();
         print(key);
@@ -519,9 +521,12 @@ def main():
         ratgood=ngood/nsamp;
         
         goodsecs = ratgood * lensec;
-        subjvids.append( dict(subj=subj, vid=vid, goodsecs=goodsecs, myidx=myidx,) );
-        pass;
+
+        #REV: append other stuff such as edffile etc., which went into myidx?
+        subjvids.append( dict(subj=subj, vid=vid, goodsecs=goodsecs, myidx=myidx, edffile=edffile) );
         
+        pass;
+    
     subjvids = pd.DataFrame( subjvids );
     vidstoview = trdf[ trdf['grp'].isin(['C', 'D']) ]; # fix group! and not practice
     vidstoview = vidstoview.video.unique();
@@ -614,9 +619,11 @@ def main():
             for subj, subjtrials in final_subjvids.groupby('subj'):
                 myevents = evdf[ evdf['myidx'].isin(subjtrials['myidx']) ].copy();
                 mysamps = sadf[ sadf['myidx'].isin(subjtrials['myidx']) ].copy();
-                mytrs = trdf[ tfdf['myidx'].isin(subjtrials['myidx']) ].copy();
+                mytrs = trdf[ trdf['myidx'].isin(subjtrials['myidx']) ].copy();
 
-                myedfs = recdf[ recdf['edffile'].isin(subjtrials['edffile']) ];.copy();
+                print(subjtrials.columns); #REV: shit this has only 'myidx' it lost orig cols.
+                print(recdf.columns);
+                myedfs = recdf[ recdf['edffile'].isin(subjtrials['edffile']) ].copy();
                 
                                 
                 print("Got {} unique trials for subj {} (minviews: {},{})".format(len(mysamps['myidx'].unique()),
@@ -632,7 +639,7 @@ def main():
                 persubj_results = compute_persubj_regressors(subj=subj, mysamps=mysamps, myevents=myevents);
                 
                 
-                allresults.append(myresult);
+                allresults.append(persubj_results);
                 pass;
             
             regressors=pd.DataFrame(allresults);
