@@ -8,6 +8,8 @@ import seaborn as sns
 import numpy as np
 from scipy.stats import gaussian_kde, zscore
 
+import peyeutils as pu;
+
 def compute_saccade_direction_ratios(df, angle_col='angle'):
     """
     Computes horizontal and vertical saccade ratios from directional angles.
@@ -248,6 +250,189 @@ def compute_kde_continuous_entropy(x_coords, y_coords,
     return kde_entropy
 
 
+#REV: use probability density (i.e. use ptsinbin/(ntotalpts*imgwid*imghei) instead of just ptsinbin/ntotalpts).
+##   I.e. scale by 1/(npixels) i.e.   1/(wid*hei).
+#REV: are there any points outside of xmin/xmax
+def points2d_to_pdensity2d(x_coords, y_coords,
+                           xmin, xmax,
+                           ymin, ymax,
+                           nxbins, nybins):
+    import numpy as np;
+    
+    hist, y_edges, x_edges = np.histogram2d(
+        y_coords, 
+        x_coords, 
+        bins=[nybins, nxbins],
+        range=[yxmin, ymax], [xmin, xmax]]
+    );
+    
+    total_points = np.sum(hist); #number of points used to generate it (divide by this to ensure sum to 1)
+    prob_matrix = hist / (total_points if total_points > 0 else 1.0);
+    my_image = np.ones((ywid, xwid), dtype=np.float64);  # Placeholder image
+    faded_image = my_image * prob_matrix
+
+    #REV; smooth it...
+    return prob_matrix;
+
+
+
+# 6. Example: Multiply it element-wise by a grayscale image
+
+#REV: shit I need to know size of video and convert to video coordinates (zero-centered and zeroed normally).
+def compute_persubjvid_regressors(subj,
+                                  mytrials,
+                                  mysamps,
+                                  myevents,
+                                  myedfs):
+    print(" PER VIDEO PER SUBJ: Subj={}".format(subj));
+
+    #REV: theoretically, each person should have seen each video only once! 
+    for myvid, subtrdf in mytrials.groupby('video'):
+        #priordistr = mysamps[ mysamps['video'] != myvid ];
+        
+        if(len(subtrdf.index) != 1):
+            print(subtrdf);
+            raise Exception("Video {} has not just one trial!".format(myvid));
+        
+        myedffile = subtrdf['edffile'].unique();
+        if( len(myedffile) != 1 ):
+            raise Exception("Wtf more than one or not one EDF file? {}".format(myedffile));
+        
+        myedf = recdf[ myedfs['edffile'] == myedffile ];
+        if( len(myedf.index) != 1 ):
+            raise Exception("Wtf edffile CSV has more than one row with identically named EDF file? -- REV: maybe separate by e.g. path? {}".format(myedf));
+        
+        
+        myedf = myedf[
+            [
+                'recinfo_EYE_USED_mode',
+                'recinfo_SCREEN_WPX',
+                'recinfo_SCREEN_HPX',
+                'recinfo_SCREEN_BGRGB',
+                'recinfo_VB_CX',
+                'recinfo_VB_CY',
+                'recinfo_VB_WPX',
+                'recinfo_VB_HPX',
+                'recinfo_VB_DM',
+                'recinfo_VB_PPM',
+                'recinfo_VB_TARGPX',
+                'recinfo_VB_TARGDVA',
+                'recinfo_VB_TARGM',
+            ]
+        ];
+        
+        #REV: just take the first (and only) row, i.e. return a dict or record (sequence? series?) or whatever.
+        recparams = myedf.iloc[0].to_dict();
+        vidparams = subtrdf.iloc[0].to_dict();
+
+        vidw = vidparams['vidw_px'];
+        vidh = vidparams['vidh_px'];
+
+        vidw_m = vidparams['vidw_px'] / recparams['recinfo_VB_PPM'];
+        vidh_m = vidparams['vidh_px'] / recparams['recinfo_VB_PPM'];
+        
+        vidwdva = np.degrees(np.arctan2(vidw_m/2, recparams['recinfo_VB_DM'] ) );
+        vidwdva *= 2; #REV: because was half, centered triangle.
+
+        vidhdva = np.degrees(np.arctan2(vidh_m/2, recparams['recinfo_VB_DM'] ) );
+        vidhdva *= 2; #REV: because was half, centered triangle.
+
+        print("Video is shown at {} x {} dva".format(vidwdva, vidhdva));
+        
+        #  start_s,end_s,video,vidw_px,vidh_px,vidxpos_px,vidypos_px,fmrist_s,fmri_offset_s,trialidx,blkidx,grp,
+        ##  APPA,ispract,rest,blkstart_s,blkend_s,name,edfdatetime,edffile
+        
+        pass;
+    
+    
+    #REV: I can use cgx_px and cgy_px.
+    #REV: However, for blurring etc., I should know how big the stimuli are. One method is simply divide the mean dva pos divided by mean px pos.
+    #REV: that is a waste though. Better if something is passed through (dva/pix etc.?). But that is "mean". Better to have the ability to
+    #REV: convert it again from first principles... Info is stored in...edftrials?
+
+    '''
+    for myvid, myvidsamps in mysamps.groupby('video'):
+        #REV: prior distr is prior distribution of subjects (on vid!=v) for v in vids. Could just use all prior for large video set...
+        #REV: but will be heavily biased for videos they watched more/longer.
+        
+        priorprobs2d = points2d_to_pdensity2d(x_coords=)
+        #REV: get "video time" of that stamp, get corresponding video frame (and saliency maps), get saliency of (around) gazed point
+        #  Also, for +/- 500 msec, also for AUROC against prior distribution. Also for NSS against prior, against only this salmap,
+        #  Also get information added.
+        pass;
+    '''
+    return myresult;
+
+
+def compute_persubj_regressors(subj, mysamps, myevents):
+
+    totalwatch=final_subjvids['goodsecs'].sum();
+    
+    saccs = myevents[ myevents['label']=='SACC' ];
+    blnks = myevents[ myevents['label']=='BLNK' ];
+    isis = myevents[ myevents['label']=='ISI' ];
+    
+    MAXBLNK_SEC=0.500;
+    
+    blnks = blnks[ blnks['dursec'] < MAXBLNK_SEC ]; #REV: otherwise it's just missing data...
+
+    BIGSMALL_CUTOFF=3
+    dcenter=np.sqrt( (mysamps['cgx_dva']-mysamps['cgx_dva'].mean())**2 +
+                     (mysamps['cgy_dva']-mysamps['cgy_dva'].mean())**2 );
+
+    saccdirs = compute_saccade_direction_ratios(saccs);
+    
+    
+    
+    #REV: TODO
+    # BCEA (pursuit/fixation jitter, and within-ISI pathlength, i.e. sum derivative?)
+    # Fatigue (change in parameters for "later" trials in session/day versus "earlier").
+    # Saliency value at target (zscore, i.e. NSE);
+    mysamps['pa_z'] = zscore(mysamps['pa_lpf'], nan_policy='omit');
+    myresult = dict(
+        subj=subj,
+        #xmean=mysamps['cgx_dva'].mean(),
+        #ymean=mysamps['cgy_dva'].mean(),
+        #xstd=mysamps['cgx_dva'].std(),
+        #ystd=mysamps['cgx_dva'].std(),
+        horiz_look_bias=mysamps['cgx_dva'].std()/mysamps['cgy_dva'].std(),
+        mean_dist_baryxy=dcenter.mean(),
+        pupilarea_zderiv=abs(mysamps['pa_z'].diff()).mean(),
+        xyentropy=compute_kde_continuous_entropy(mysamps['cgx_dva'],
+                                                 mysamps['cgy_dva'],
+                                                 screen_width=10,
+                                                 screen_height=10,
+                                                 ),
+        blnk_rate=len(blnks.index)/totalwatch, #REV: could be missing data? Should use pupilsize
+        centerbias1_0dva=np.mean(dcenter<1),
+        centerbias2_5dva=np.mean(dcenter<2.5),
+        scanpath_persec=saccs['ampldva'].sum()/totalwatch,
+        sacc_ampldur_mean=(saccs['ampldva']/saccs['dursec']).mean(), #REV: should fit a line? this will be biased by clustery values...not penalized by distance^2.
+        sacc_rate=len(saccs.index)/totalwatch,
+        sacc_ampl_med=saccs['ampldva'].median(),
+        sacc_ampl_std=saccs['ampldva'].std(),
+        #sacc_vert_ratio=saccdirs['vertical_ratio'],
+        sacc_horiz_bias=saccdirs['horizontal_ratio'],
+
+        sacc_smallbig1dva_ratio=len(saccs[ saccs['ampldva'] <= 1 ].index) / len(saccs[ saccs['ampldva'] > 1].index),
+
+        sacc_smallbig3dva_ratio=len(saccs[ saccs['ampldva'] <= 3 ].index) / len(saccs[ saccs['ampldva'] > 3 ].index),
+
+        #sacc_smallbig5dva_ratio=len(saccs[ saccs['ampldva'] <= 5 ].index) / len(saccs[ saccs['ampldva'] > 5 ].index),
+
+        isi_dur_med=isis['dursec'].median(),
+        isi_dur_std=isis['dursec'].std(),
+        isi_vel_med=isis['avgvel'].median(),
+        isi_vel_std=isis['avgvel'].std(), #REV: only fix or only pursuit, or mix of both?
+        #isi_vel_med=isis['medvel'].median(),
+
+        #saccdur_med=saccs['ampldva'].median(),
+        #REV: saliency etc.
+
+    );
+    
+    return myresult;
+
 
 
 def main():
@@ -255,6 +440,9 @@ def main():
     eventscsv=sys.argv[2];
     samplscsv=sys.argv[3];
     
+    recedfcsv = sys.argv[4];
+    
+    '''
     if( len(sys.argv) > 4 ):
         minviewsecs=float(sys.argv[4]);
         minviewsubjs=int(sys.argv[5]);
@@ -263,10 +451,13 @@ def main():
         minviewsecs=-1;
         minviewsubjs=-1;
         pass;
+    '''
     
     trdf = pd.read_csv(trialscsv);
     evdf = pd.read_csv(eventscsv);
     sadf = pd.read_csv(samplscsv);
+
+    recdf = pd.read_csv(recedfcsv);
     
     print(trdf);
     print(trdf.ispract);
@@ -304,7 +495,7 @@ def main():
 
     subjvids=list();
 
-
+    
     for key in trgrps.groups:
         mytrdf=trgrps.get_group(key);
         subj=mytrdf.iloc[0]['name'];
@@ -382,7 +573,7 @@ def main():
         minviewsecs_todo=[minviewsecs,];
         minviewsubjs_todo=[minviewsubjs,];
         pass;
-
+    
     all_regressors=list();
     for minviewsecs, minviewsubjs in mins_todo:
         if(True): #REV: skip level for indent.            
@@ -419,75 +610,28 @@ def main():
             #####    Or, "mean of scanpath/time of each video"? THE FORMER!
             
             allresults=list();
+            #REV: for each SUBJECT within this video subset context (i.e. shared videos of which each subject has seen >X sec of each)
             for subj, subjtrials in final_subjvids.groupby('subj'):
                 myevents = evdf[ evdf['myidx'].isin(subjtrials['myidx']) ].copy();
                 mysamps = sadf[ sadf['myidx'].isin(subjtrials['myidx']) ].copy();
+                mytrs = trdf[ tfdf['myidx'].isin(subjtrials['myidx']) ].copy();
+
+                myedfs = recdf[ recdf['edffile'].isin(subjtrials['edffile']) ];.copy();
                 
-                print("Got {} unique trials for subj {} (minviews: {},{})".format(len(mysamps['myidx'].unique()), subj, minviewsecs, minviewsubjs));
+                                
+                print("Got {} unique trials for subj {} (minviews: {},{})".format(len(mysamps['myidx'].unique()),
+                                                                                  subj,
+                                                                                  minviewsecs,
+                                                                                  minviewsubjs));
                 
-                totalwatch=final_subjvids['goodsecs'].sum();
                 
-                saccs = myevents[ myevents['label']=='SACC' ];
-                blnks = myevents[ myevents['label']=='BLNK' ];
-                isis = myevents[ myevents['label']=='ISI' ];
+                print("----- COMPUTING *PER VIDEO* REGRESSORS ------");
+                persubjvid_results = compute_persubjvid_regressors(subj=subj, mytrials=mytrs, mysamps=mysamps, myevents=myevents, myedfs=myedfs);
                 
-                MAXBLNK_SEC=0.500;
+                print("----- COMPUTING *PER SUBJECT* REGRESSORS ------");
+                persubj_results = compute_persubj_regressors(subj=subj, mysamps=mysamps, myevents=myevents);
                 
-                blnks = blnks[ blnks['dursec'] < MAXBLNK_SEC ]; #REV: otherwise it's just missing data...
                 
-                BIGSMALL_CUTOFF=3
-                dcenter=np.sqrt( (mysamps['cgx_dva']-mysamps['cgx_dva'].mean())**2 +
-                                 (mysamps['cgy_dva']-mysamps['cgy_dva'].mean())**2 );
-                
-                saccdirs = compute_saccade_direction_ratios(saccs);
-                
-                #REV: TODO
-                # BCEA (pursuit/fixation jitter, and within-ISI pathlength, i.e. sum derivative?)
-                # Fatigue (change in parameters for "later" trials in session/day versus "earlier").
-                # Saliency value at target (zscore, i.e. NSE);
-                
-                mysamps['pa_z'] = zscore(mysamps['pa_lpf'], nan_policy='omit');
-                myresult = dict(
-                    subj=subj,
-                    #xmean=mysamps['cgx_dva'].mean(),
-                    #ymean=mysamps['cgy_dva'].mean(),
-                    #xstd=mysamps['cgx_dva'].std(),
-                    #ystd=mysamps['cgx_dva'].std(),
-                    horiz_look_bias=mysamps['cgx_dva'].std()/mysamps['cgy_dva'].std(),
-                    mean_dist_baryxy=dcenter.mean(),
-                    pupilarea_zderiv=abs(mysamps['pa_z'].diff()).mean(),
-                    xyentropy=compute_kde_continuous_entropy(mysamps['cgx_dva'],
-                                                             mysamps['cgy_dva'],
-                                                             screen_width=10,
-                                                             screen_height=10,
-                                                             ),
-                    blnk_rate=len(blnks.index)/totalwatch, #REV: could be missing data? Should use pupilsize
-                    centerbias1_0dva=np.mean(dcenter<1),
-                    centerbias2_5dva=np.mean(dcenter<2.5),
-                    scanpath_persec=saccs['ampldva'].sum()/totalwatch,
-                    sacc_ampldur_mean=(saccs['ampldva']/saccs['dursec']).mean(), #REV: should fit a line? this will be biased by clustery values...not penalized by distance^2.
-                    sacc_rate=len(saccs.index)/totalwatch,
-                    sacc_ampl_med=saccs['ampldva'].median(),
-                    sacc_ampl_std=saccs['ampldva'].std(),
-                    #sacc_vert_ratio=saccdirs['vertical_ratio'],
-                    sacc_horiz_bias=saccdirs['horizontal_ratio'],
-                    
-                    sacc_smallbig1dva_ratio=len(saccs[ saccs['ampldva'] <= 1 ].index) / len(saccs[ saccs['ampldva'] > 1].index),
-                    
-                    sacc_smallbig3dva_ratio=len(saccs[ saccs['ampldva'] <= 3 ].index) / len(saccs[ saccs['ampldva'] > 3 ].index),
-                    
-                    #sacc_smallbig5dva_ratio=len(saccs[ saccs['ampldva'] <= 5 ].index) / len(saccs[ saccs['ampldva'] > 5 ].index),
-                    
-                    isi_dur_med=isis['dursec'].median(),
-                    isi_dur_std=isis['dursec'].std(),
-                    isi_vel_med=isis['avgvel'].median(),
-                    isi_vel_std=isis['avgvel'].std(), #REV: only fix or only pursuit, or mix of both?
-                    #isi_vel_med=isis['medvel'].median(),
-                    
-                    #saccdur_med=saccs['ampldva'].median(),
-                    #REV: saliency etc.
-                    
-                );
                 allresults.append(myresult);
                 pass;
             

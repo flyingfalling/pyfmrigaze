@@ -36,6 +36,7 @@ def calculate_bcea(x, y, p=0.6827):
     bcea = np.pi * chi2_val * np.sqrt(eigenvalues[0] * eigenvalues[1])
     return bcea
 
+
 def calculate_detrended_bcea(x, y, p=0.6827):
     """
     Removes the linear trajectory (smooth pursuit) before calculating BCEA.

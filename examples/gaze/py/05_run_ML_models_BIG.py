@@ -15,7 +15,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.metrics import (accuracy_score, roc_auc_score, roc_curve, confusion_matrix)
 
-ext='.png';
+ext='.jpg';
 
 def bootstrap_auc_ci(y_true, y_pred_proba, n_bootstraps=1000):
     """Calculates 95% CI for AUROC using bootstrapping."""
@@ -278,17 +278,18 @@ if len(selected_features) > 0:
     # 7. MODEL PERFORMANCE PLOTS
     # ==========================================
     print("--- 7. Generating Model Plots ---")
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-
+    fig, axes = plt.subplots(2, 1, figsize=(8, 13))
+    
     # ROC Curves
     for name, (fpr, tpr, auc, _) in roc_data.items():
         axes[0].plot(fpr, tpr, label=f"{name} (AUC = {auc:.2f})")
-    axes[0].plot([0, 1], [0, 1], 'k--')
-    axes[0].set_title("ROC Curves")
-    axes[0].set_xlabel("False Positive Rate")
-    axes[0].set_ylabel("True Positive Rate")
-    axes[0].legend(loc="lower right")
-
+        axes[0].plot([0, 1], [0, 1], 'k--')
+        axes[0].set_title("ROC Curves")
+        axes[0].set_xlabel("False Positive Rate")
+        axes[0].set_ylabel("True Positive Rate")
+        axes[0].legend(loc="lower right")
+        pass;
+    
     # Best Confusion Matrix
     best_model = results_df.loc[results_df['AUROC'].idxmax(), 'Model']
     sns.heatmap(roc_data[best_model][3], annot=True, fmt='d', cmap='Blues', ax=axes[1], 
@@ -307,7 +308,7 @@ if len(selected_features) > 0:
     ax = sns.barplot(data=df_melted, x='Model', y='Score', hue='Metric', palette=cp_models)
     plt.title("Model Performance Comparison")
     plt.ylim(0, 1.1)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.legend(); #bbox_to_anchor=(1.05, 1), loc='upper left')
     for container in ax.containers:
         ax.bar_label(container, fmt='%.2f', padding=3, size=9)
     plt.tight_layout()
