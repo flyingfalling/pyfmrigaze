@@ -297,7 +297,8 @@ def compute_persubjvid_regressors(subj,
         myedffile = subtrdf['edffile'].unique();
         if( len(myedffile) != 1 ):
             raise Exception("Wtf more than one or not one EDF file? {}".format(myedffile));
-        
+
+        myedffile=myedffile[0];
         myedf = myedfs[ myedfs['edffile'] == myedffile ];
         if( len(myedf.index) != 1 ):
             raise Exception("Wtf edffile CSV has more than one row with identically named EDF file? -- REV: maybe separate by e.g. path? {}".format(myedf));
@@ -333,11 +334,12 @@ def compute_persubjvid_regressors(subj,
         
         vidwdva = np.degrees(np.arctan2(vidw_m/2, recparams['recinfo_VB_DM'] ) );
         vidwdva *= 2; #REV: because was half, centered triangle.
-
+        dvapm = pu.utils.get_center_dva_per_meter( recparams['recinfo_VB_DM'] , recparams['recinfo_VB_PPM']);
         vidhdva = np.degrees(np.arctan2(vidh_m/2, recparams['recinfo_VB_DM'] ) );
         vidhdva *= 2; #REV: because was half, centered triangle.
 
         print("Video {} for subj={} is shown at {} x {} dva".format(myvid, subj, vidwdva, vidhdva));
+        print("(NAIVE: ) {} x {} dva".format(dvapm*vidw_m, dvapm*vidh_m));
         
         #  start_s,end_s,video,vidw_px,vidh_px,vidxpos_px,vidypos_px,fmrist_s,fmri_offset_s,trialidx,blkidx,grp,
         ##  APPA,ispract,rest,blkstart_s,blkend_s,name,edfdatetime,edffile
@@ -365,8 +367,7 @@ def compute_persubjvid_regressors(subj,
     return myresult;
 
 
-def compute_persubj_regressors(subj, mysamps, myevents):
-
+def compute_persubj_regressors(subj, mysamps, myevents, final_subjvids):
     totalwatch=final_subjvids['goodsecs'].sum();
     
     saccs = myevents[ myevents['label']=='SACC' ];
@@ -636,7 +637,7 @@ def main():
                 persubjvid_results = compute_persubjvid_regressors(subj=subj, mytrials=mytrs, mysamps=mysamps, myevents=myevents, myedfs=myedfs);
                 
                 print("----- COMPUTING *PER SUBJECT* REGRESSORS ------");
-                persubj_results = compute_persubj_regressors(subj=subj, mysamps=mysamps, myevents=myevents);
+                persubj_results = compute_persubj_regressors(subj=subj, mysamps=mysamps, myevents=myevents, final_subjvids=final_subjvids);
                 
                 
                 allresults.append(persubj_results);
