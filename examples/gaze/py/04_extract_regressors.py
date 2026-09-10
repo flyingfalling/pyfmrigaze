@@ -266,16 +266,16 @@ def points2d_to_pdensity2d(x_coords, y_coords,
         y_coords, 
         x_coords, 
         bins=[nybins, nxbins],
-        range=[[yxmin, ymax], [xmin, xmax]]
+        range=[[ymin, ymax], [xmin, xmax]]
     );
     
     total_points = np.sum(hist); #number of points used to generate it (divide by this to ensure sum to 1)
     prob_matrix = hist / (total_points if total_points > 0 else 1.0);
-    my_image = np.ones((ywid, xwid), dtype=np.float64);  # Placeholder image
+    my_image = np.ones((nybins, nxbins), dtype=np.float64);  # Placeholder image
     faded_image = my_image * prob_matrix
-
-    #REV; smooth it...
-    return prob_matrix;
+    
+    #REV; smooth it...?
+    return prob_matrix, hist.astype(int);
 
 
 
@@ -297,13 +297,15 @@ def compute_persubjvid_regressors(subj,
                                   myevents,
                                   myedfs,
                                   viddir,
-                                  saldir=''):
+                                  saldir):
     
     print(" PER VIDEO PER SUBJ: Subj={}".format(subj));
 
+    salresults=list();
+    
     #REV: theoretically, each person should have seen each video only once! 
     for myvid, subtrdf in mytrials.groupby('video'):
-        #priordistr = mysamps[ mysamps['video'] != myvid ];
+        myidx = subtrdf.iloc[0]['myidx'] ;
         
         if(len(subtrdf.index) != 1):
             print(subtrdf);
@@ -350,6 +352,7 @@ def compute_persubjvid_regressors(subj,
         vidwdva = np.degrees(np.arctan2(vidw_m/2, recparams['recinfo_VB_DM'] ) );
         vidwdva *= 2; #REV: because was half, centered triangle.
         dvapm = pu.utils.get_center_dva_per_meter( recparams['recinfo_VB_DM'] , recparams['recinfo_VB_PPM']);
+        dvappx = dvapm / recparams['recinfo_VB_PPM'];
         vidhdva = np.degrees(np.arctan2(vidh_m/2, recparams['recinfo_VB_DM'] ) );
         vidhdva *= 2; #REV: because was half, centered triangle.
 
@@ -368,9 +371,35 @@ def compute_persubjvid_regressors(subj,
 
         #REV: easier to do for all frames? Or for all gaze points (assuming 1/frame)?
 
+        
         vidsamps = mysamps[ mysamps['myidx'] == subtrdf.iloc[0]['myidx'] ].copy();
+        priorsamps = mysamps[ mysamps['video'] != myvid ].copy();
+        
+        
+        vidsamps['x'] = vidsamps['cgx_px'] + vidw/2;
+        vidsamps['y'] = vidsamps['cgy_px'] + vidh/2;
+        vidsamps['y'] = vidh - vidsamps['y']; #REV; for opencv, top is 0.
+        
         #print(vidsamps['cgx_px'].median());
         #print(vidsamps['cgy_px'].median());
+
+        #REV: stupid to do this each time, but vidw/vidh may change each time.
+        #REV: although, vid size of originals may change too but whatever...
+        priorsamps['x'] = priorsamps['cgx_px'] + vidw/2;
+        priorsamps['y'] = priorsamps['cgy_px'] + vidh/2;
+        priorsamps['y'] = vidh - priorsamps['y']; #REV; for opencv, top is 0.
+        
+        priorprobs2d, priorhist = points2d_to_pdensity2d(priorsamps['x'],
+                                                         priorsamps['y'],
+                                                         0, vidw,
+                                                         0, vidh,
+                                                         vidw,
+                                                         vidh
+                                                         );
+        
+        #print(priorhist.dtype);
+        #print(priorhist);
+        
         
         if( len(vidsamps.eye.unique()) != 1 ):
             raise Exception("more than one eye's data in samples, you need to subset (maybe)");
@@ -395,13 +424,60 @@ def compute_persubjvid_regressors(subj,
                              fourcc,
                              capparams['fps'],
                              (outw, outh) );
+
+
+        ####### PARAMETERS FOR SALIENCY MODELS ETC ############
+        salblur_dva_radius= 0.33; #REV: size is only 10-12 deg video size...
+        #REV: this is more to account for eyetracker.
+        salblur_px_radius = salblur_dva_radius / dvappx;
+        print("Blurring sal radius={:3.1f}dva (={:3.1f} px)".format(salblur_dva_radius, salblur_px_radius));
+        
+        before_time_sec= 0.0; #0;
+        after_time_sec = 0.250; #300; #0;
+        
+        salkinds=['ori', 'col', 'lum', 'mot', 'fin'];
+        
+        ######### END PARAMETERS #############################
         
         dt = 1/capparams['fps'];
         vidsamps['Tsec'] = vidsamps['Tsec'] - vidparams['start_s'];
 
         #REV: I should zero-out blinks and saccades etc.?
         
+        #salkinds=['ori', 'col', 'lum', 'mot', 'fli', 'fin'];
+
+        ########## OPTIONS ##################
+
+        MKVID=False; #True; #False;
+        
+        ############ END OPTIONS ############
+        
+
+        spctls=dict();
+        svws = dict();
+        if( saldir ):
+            salcaps = dict();
+            
+            for k in salkinds:
+                spctls[k]=0;
+                salpath=os.path.join(saldir, vidparams['grp'], myvid); #blah/A/clip_XXXX.mpg
+                salpath += '_{}.mkv'.format(k);
+                salcaps[k], framedf, capparams = pu.utils.read_video_timestamps(salpath, timename='Tsec');
+
+                if(MKVID):
+                    svws[k] = cv2.VideoWriter('{}_{}_{}.mkv'.format(subj, myvid, k),
+                                              fourcc,
+                                              capparams['fps'],
+                                              (outw, outh) );
+                    pass;
+                pass;
+            pass;
+        
+        nsamps=0;
         for i, row in framedf.iterrows():
+            if( i % 30 == 0 ):
+                print("{}/{} frames".format(i, len(framedf.index)));
+                pass;
             vidt = row['Tsec'];
             #print(vidparams['start_s']);
             #print(vidparams['blkstart_s']);
@@ -409,56 +485,170 @@ def compute_persubjvid_regressors(subj,
             #print(vidparams['fmrist_s']);
             #print(vidsamps["Tsec"]);
             
-            tsamps = vidsamps[ (vidsamps['Tsec']>=vidt) & (vidsamps['Tsec']<(vidt+dt)) ];
+            #REV: to only get gaze samples inside this frame, use 0.
+            #REV: this effectively "blurs" it a bit in time as well...
+            #REV: note too high "before" will capture "predictive" looking, which our simple
+            #REV: saliency model should NOT predict!!!!!
+            tsamps = vidsamps[ (vidsamps['Tsec']>=(vidt+before_time_sec)) & (vidsamps['Tsec']<(vidt+dt+after_time_sec)) ];
             
-            print("For t={}-{}".format(vidt, vidt+dt));
+            #print("For t={}-{}".format(vidt, vidt+dt));
             #print(tsamps);
             ret, frame = cap.read();
             if( False == ret ):
                 raise Exception("Expecting more frames but there are none?");
             
+            sframes=dict();
+            pretty_sframes=dict();
+            
+            prior_sals=dict();
+            poste_sals=dict();
+            if( saldir ):
+                for k in salkinds:
+                    sret, sframes[k] = salcaps[k].read();
+                    if( not sret ):
+                        raise Exception("No more frames in {}".format(k));
+                    sframes[k] = sframes[k][:,:,0]; #REV; it's 3 monochrome chan, just take first.
+                    sframes[k] = cv2.resize(sframes[k], (vidw, vidh));
+
+                    #REV: blur them (if needed)
+
+                    if(MKVID):
+                        pretty_sframes[k] = cv2.applyColorMap(sframes[k], cv2.COLORMAP_JET);
+                        pass;
+                    
+                    
+                    sframes[k] = cv2.GaussianBlur(sframes[k], (0,0), sigmaX=salblur_px_radius);
+
+
+                    #REV: this is sampling 
+                    prior_sals[k] = np.repeat(sframes[k].flatten(), priorhist.flatten());
+                    img_sals[k] = sframes[k].flatten();
+                    pass;
+                pass;
+            
             frame = cv2.resize( frame, (vidw, vidh) );
-            gazex = tsamps['cgx_px'] + vidw/2;
-            gazey = tsamps['cgy_px'] + vidh/2;
-            gazey = vidh - gazey;
+            gazex = tsamps['x']; #tsamps['cgx_px'] + vidw/2;
+            gazey = tsamps['y'];
+
+            
+            
+            #REV: Sample at each TP and FP position. I can't just multiply histogram * salmap,
+            #REV: because I don't know if density came from high saliency and single sample, or
+            #REV: because it came from low saliency and many samples...
             
             for x,y in zip(gazex, gazey):
                 if( not np.isfinite(x) ):
                     continue;
-                print('{}/{}, {}/{}'.format(int(x),vidw,int(y),vidh));
-                cv2.circle(img=frame,
-                           center=(int(x),int(y)),
-                           radius=5,
-                           color=(0,0,255),
-                           thickness=2,
-                           lineType=cv2.LINE_AA,
-                           );
-                pass;
+                #print('{}/{}, {}/{}'.format(int(x),vidw,int(y),vidh));
+                if(MKVID):
+                    cv2.circle(img=frame,
+                               center=(int(x),int(y)),
+                               radius=7,
+                               color=(0,0,255),
+                               thickness=2,
+                               lineType=cv2.LINE_AA,
+                               );
+                    pass;
+                
+                if( saldir ):
+                    nsamps+=1;
+                    for k in salkinds:
+                        if(MKVID):
+                            cv2.circle(img=pretty_sframes[k],
+                                       center=(int(x),int(y)),
+                                       radius=7,
+                                       color=(0,0,255),
+                                       thickness=2,
+                                       lineType=cv2.LINE_AA,
+                                       );
+                            pass;
+                        
+                        if( y >=0 and y<vidh and x >=0 and x<vidw ):
+                            poste_sals[k] = sframes[k][int(y),int(x)];
 
+                            #REV: I could normalize each one to have same "weight"
+                            #REV: then sum them all, and plot "gazed location" and "ungazed loc"
+                            prior_pctl = (prior_sals[k] < poste_sals[k]).mean() * 100;
+                            spctls[k]+=prior_pctl;
+                            prior_nss = ( poste_sals[k] - np.mean(prior_sals[k]) ) / np.std(prior_sals[k]);
+                            snsss[k]+= prior_nss;
+                            
+                            img_pctl = (img_sals[k] < poste_sals[k]).mean() * 100;
+                            ipctls[k]+=img_pctl;
+                            img_nss = ( poste_sals[k] - np.mean(img_sals[k]) ) / np.std(img_sals[k]);
+
+                            #REV: information gain? (IG)
+                            # IG = log2( p_model(x) / p_null(x) )
+                            #print("Saliency ({}): ({},{}),val={:3.1f} = {:3.1f} pct".format(k, int(x), int(y), poste_sals[k], pctl));
+                            pass;
+                        else:
+                            #print("({},{}) outside vid ({}x{}".format(int(x),int(y),vidw,vidh));
+                            pass;
+                        pass;
+                    pass;
+                pass;
+            
             frame = cv2.resize(frame, (outw, outh));
-            vw.write(frame);
+
+            if( saldir  and   MKVID ):
+                for k in salkinds:
+                    pretty_sframes[k] = cv2.resize(pretty_sframes[k], (outw, outh));
+                    svws[k].write(pretty_sframes[k]);
+                    pass;
+                pass;
+            
+            if(MKVID):
+                vw.write(frame);
+                pass;
             pass;
-        pass;
+        
+        cap.release();
+        
+        if(MKVID):
+            vw.release();
+            pass;
+        
+        if (saldir):
+            for k in salkinds:
+                salcaps[k].release();
+                if(MKVID):
+                    svws[k].release();
+                    pass;
+                pass;
+            pass;
+
+        if(saldir):
+            for k in salkinds:
+                pctl=spctls[k]/nsamps;
+                salresults.append( dict(subj=subj, salkind=k, pctl=pctl, vid=myvid, myidx=myidx) );
+                print("Sal ({}): {:3.1f} pctl".format(k, spctls[k]/nsamps));
+                pass;
+            pass;
+        
+        pass; #REV: end this video (trial) of this subject.
+
+    subjdf=pd.DataFrame(salresults);
+    print(subjdf);
     
-    vw.release();
+    
     #REV: I can use cgx_px and cgy_px.
     #REV: However, for blurring etc., I should know how big the stimuli are. One method is simply divide the mean dva pos divided by mean px pos.
     #REV: that is a waste though. Better if something is passed through (dva/pix etc.?). But that is "mean". Better to have the ability to
     #REV: convert it again from first principles... Info is stored in...edftrials?
-
+    
     '''
     for myvid, myvidsamps in mysamps.groupby('video'):
         #REV: prior distr is prior distribution of subjects (on vid!=v) for v in vids. Could just use all prior for large video set...
         #REV: but will be heavily biased for videos they watched more/longer.
         
-        priorprobs2d = points2d_to_pdensity2d(x_coords=)
+        
         #REV: get "video time" of that stamp, get corresponding video frame (and saliency maps), get saliency of (around) gazed point
         #  Also, for +/- 500 msec, also for AUROC against prior distribution. Also for NSS against prior, against only this salmap,
         #  Also get information added.
         pass;
     '''
-    myresult=None;
-    return myresult;
+    
+    return subjdf;
 
 
 def compute_persubj_regressors(subj, mysamps, myevents, final_subjvids):
@@ -537,7 +727,8 @@ def main():
     samplscsv=sys.argv[3];
     
     recedfcsv = sys.argv[4];
-    viddir = '/mnt/coishare/data/stimuli/fmri_lab90c2/';
+    viddir = '/mnt/coishare/data/stimuli/fmri7T_vids_20221109' #'/mnt/coishare/data/stimuli/fmri_lab90c2/';
+    saldir = viddir + '_salmaps';
     
     '''
     if( len(sys.argv) > 4 ):
@@ -677,6 +868,7 @@ def main():
         pass;
     
     all_regressors=list();
+    all_salresults=list();
     for minviewsecs, minviewsubjs in mins_todo:
         if(True): #REV: skip level for indent.            
             # Create binary matrix (subjects as rows, videos as columns)
@@ -710,17 +902,19 @@ def main():
             ##### Ignoring actual videos...
             #####   For scanpath, should it be "union over all videos" (per unit time)?
             #####    Or, "mean of scanpath/time of each video"? THE FORMER!
-            
+
+            salresults=list();
             allresults=list();
             #REV: for each SUBJECT within this video subset context (i.e. shared videos of which each subject has seen >X sec of each)
+            
             for subj, subjtrials in final_subjvids.groupby('subj'):
                 myevents = evdf[ evdf['myidx'].isin(subjtrials['myidx']) ].copy();
                 mysamps = sadf[ sadf['myidx'].isin(subjtrials['myidx']) ].copy();
                 mytrs = trdf[ trdf['myidx'].isin(subjtrials['myidx']) ].copy();
-
+                
                 myedfs = recdf[ recdf['edffile'].isin(subjtrials['edffile']) ].copy();
                 
-                                
+                
                 print("Got {} unique trials for subj {} (minviews: {},{})".format(len(mysamps['myidx'].unique()),
                                                                                   subj,
                                                                                   minviewsecs,
@@ -728,8 +922,11 @@ def main():
                 
                 
                 print("----- COMPUTING *PER VIDEO* REGRESSORS ------");
-                persubjvid_results = compute_persubjvid_regressors(subj=subj, mytrials=mytrs, mysamps=mysamps, myevents=myevents, myedfs=myedfs, viddir=viddir);
+                persubjvid_results = compute_persubjvid_regressors(subj=subj, mytrials=mytrs, mysamps=mysamps, myevents=myevents, myedfs=myedfs, viddir=viddir, saldir=saldir);
                 
+                salresults.append(persubjvid_results);
+                print("SUBJ {}, PCTL MEANS:".format(subj));
+                print(persubjvid_results.groupby('salkind').mean(numeric_only=True));
                 print("----- COMPUTING *PER SUBJECT* REGRESSORS ------");
                 persubj_results = compute_persubj_regressors(subj=subj, mysamps=mysamps, myevents=myevents, final_subjvids=final_subjvids);
                 
@@ -737,14 +934,23 @@ def main():
                 allresults.append(persubj_results);
                 pass;
             
+            allsalresults = pd.concat(salresults);
+            allsalresults['minviewsecs']=minviewsecs;
+            allsalresults['minviewsubjs']=minviewsubjs;
+            allsalresults['minviewvids']=minviewvids;
+            
             regressors=pd.DataFrame(allresults);
             regressors['minviewsecs']=minviewsecs;
             regressors['minviewsubjs']=minviewsubjs;
             regressors['minviewvids']=minviewvids;
             all_regressors.append(regressors);
+            all_salresults.append(allsalresults);
             pass;
         pass;
     #regressors.to_csv('allregressors_minsec_{}_minsubj_{}.csv'.format(minviewsecs,minviewsubjs), index=False);
+
+    all_salresults = pd.concat(all_salresults, ignore_index=True);
+    all_salresults.to_csv('allsalresults.csv', index=False);
     
     all_regressors = pd.concat(all_regressors, ignore_index=True);
     all_regressors.to_csv('allregressors.csv', index=False);
