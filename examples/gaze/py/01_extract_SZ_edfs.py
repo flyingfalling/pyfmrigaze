@@ -20,7 +20,8 @@ def preproc_file(fn, out_csv_path, doplot=False):
     print("Setting input EDF filename to [{}]".format(fn));
 
     targ_sr_hzsec=1000;
-    
+
+    #REV: ENTRY POINT -- this is first touch to raw EDF data.
     row, s, m, bt, b = pu.preproc_peyefv_edf(fn, out_csv_path=out_csv_path, targ_sr_hzsec=targ_sr_hzsec);
     
     #print(s);
